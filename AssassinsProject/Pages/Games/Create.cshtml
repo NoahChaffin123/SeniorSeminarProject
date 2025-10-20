@@ -1,0 +1,14 @@
+@page
+@model AssassinsProject.Pages.Games.CreateModel
+<h1>Create Game</h1>
+
+<form method="post">
+  <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+  <div class="mb-3">
+    <label asp-for="Name" class="form-label"></label>
+    <input asp-for="Name" class="form-control" />
+    <span asp-validation-for="Name" class="text-danger"></span>
+  </div>
+  <button class="btn btn-primary" type="submit">Create</button>
+  <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+</form>

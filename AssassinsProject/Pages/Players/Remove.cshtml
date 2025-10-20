@@ -1,0 +1,43 @@
+@page
+@model AssassinsProject.Pages.Players.RemoveModel
+@{
+    ViewData["Title"] = "Remove Player";
+}
+<h1>Remove Player</h1>
+
+<div class="alert alert-warning">
+  <div><strong>@Model.DisplayName</strong> (@Model.Email)</div>
+  @if (!string.IsNullOrEmpty(Model.PhotoUrl))
+  {
+    <div class="mt-2">
+      <img src="@Model.PhotoUrl" alt="photo" style="height:80px;width:80px;object-fit:cover;border-radius:8px;" />
+    </div>
+  }
+  <hr />
+  @if (Model.Status == AssassinsProject.Models.GameStatus.Setup)
+  {
+    <p>This will <strong>delete</strong> the player from the game.</p>
+  }
+  else if (Model.Status == AssassinsProject.Models.GameStatus.Active)
+  {
+    <p>This will <strong>deactivate</strong> the player and <strong>splice</strong> them out of the target ring. No points are awarded.</p>
+  }
+  else
+  {
+    <p>The game is completed; removal is not allowed.</p>
+  }
+</div>
+
+@if (Model.Status != AssassinsProject.Models.GameStatus.Completed)
+{
+  <form method="post">
+    <input type="hidden" asp-for="GameId" />
+    <input type="hidden" asp-for="Email" />
+    <button class="btn btn-danger" type="submit">Confirm Remove</button>
+    <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Cancel</a>
+  </form>
+}
+else
+{
+  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back</a>
+}

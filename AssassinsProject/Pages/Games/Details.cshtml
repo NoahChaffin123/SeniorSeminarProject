@@ -1,0 +1,123 @@
+@page "{id:int}"
+@model AssassinsProject.Pages.Games.DetailsModel
+@{
+    var g = Model.Game!;
+}
+<h1>@g.Name</h1>
+<p>Status: <strong>@g.Status</strong></p>
+
+<div class="mb-3">
+  <span class="badge bg-@(g.IsSignupOpen ? "success" : "secondary")">
+    Signups: @(g.IsSignupOpen ? "Open" : "Closed")
+  </span>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.SignupUrl) || !string.IsNullOrEmpty(Model.ReportUrl))
+{
+  <div class="row g-3 mb-3">
+    @if (!string.IsNullOrEmpty(Model.SignupUrl))
+    {
+      <div class="col-md-6">
+        <label class="form-label">Signup link to share:</label>
+        <input type="text" class="form-control" readonly
+               value="@(g.IsSignupOpen ? Model.SignupUrl : "(signups are closed)")" />
+      </div>
+    }
+    @if (!string.IsNullOrEmpty(Model.ReportUrl))
+    {
+      <div class="col-md-6">
+        <label class="form-label">Report Elimination link (share with players):</label>
+        <input type="text" class="form-control" readonly value="@Model.ReportUrl" />
+      </div>
+    }
+  </div>
+}
+
+@if (g.Status == AssassinsProject.Models.GameStatus.Setup)
+{
+  <form method="post" asp-page-handler="Start" class="d-inline">
+    <button class="btn btn-success">Start Game</button>
+  </form>
+
+  @if (g.IsSignupOpen)
+  {
+    <form method="post" asp-page-handler="CloseSignup" class="d-inline ms-2">
+      <button class="btn btn-outline-warning"
+              onclick="return confirm('Close signups now? Players will not be able to join until you reopen.');">
+        Close Signups
+      </button>
+    </form>
+  }
+  else
+  {
+    <form method="post" asp-page-handler="OpenSignup" class="d-inline ms-2">
+      <button class="btn btn-outline-success">Open Signups</button>
+    </form>
+  }
+
+  <a class="btn btn-secondary ms-2" asp-page="/Players/Add" asp-route-gameId="@g.Id">Add Player (admin)</a>
+  <a class="btn btn-outline-primary ms-2" asp-page="/Signup/Index" asp-route-gameId="@g.Id">Open Signup</a>
+}
+else
+{
+  <a class="btn btn-secondary" asp-page="/Players/Add" asp-route-gameId="@g.Id">Add Player (admin)</a>
+  <a class="btn btn-primary ms-2" asp-page="/Eliminations/Report" asp-route-gameId="@g.Id">Report Elimination</a>
+}
+
+<h2 class="mt-4">Active Ring</h2>
+@if (Model.ActivePlayers.Count == 0) { <p>No active players.</p> }
+else
+{
+  <ul>
+  @foreach (var p in Model.ActivePlayers)
+  {
+    <li>
+      <strong>@p.DisplayName</strong>
+      @if (!string.IsNullOrEmpty(p.PhotoUrl))
+      { <img src="@p.PhotoUrl" alt="photo" style="height:36px;width:36px;object-fit:cover;border-radius:50%;margin-left:8px;" /> }
+      → <em>@(p.TargetEmail ?? "(none)")</em>
+    </li>
+  }
+  </ul>
+}
+
+<h2 class="mt-4">Scoreboard</h2>
+<table class="table">
+  <thead><tr><th>Player</th><th>Points</th><th>Status</th><th>Admin</th></tr></thead>
+  <tbody>
+  @foreach (var p in Model.AllPlayers)
+  {
+    <tr class="@(p.IsActive ? "" : "table-secondary")">
+      <td>@p.DisplayName (@p.Email)</td>
+      <td>@p.Points</td>
+      <td>@(p.IsActive ? "Active" : "Eliminated")</td>
+      <td>
+        <a class="btn btn-sm btn-outline-secondary"
+           asp-page="/Players/Edit"
+           asp-route-gameId="@g.Id"
+           asp-route-email="@p.Email">Edit</a>
+
+        <a class="btn btn-sm btn-outline-danger ms-1"
+           asp-page="/Players/Remove"
+           asp-route-gameId="@g.Id"
+           asp-route-email="@p.Email"
+           onclick="return confirm('Are you sure you want to remove this player?');">
+           Remove
+        </a>
+      </td>
+    </tr>
+  }
+  </tbody>
+</table>
+
+<h2 class="mt-4">Elimination History</h2>
+@if (Model.Eliminations.Count == 0) { <p>None yet.</p> }
+else
+{
+  <ul>
+  @foreach (var e in Model.Eliminations)
+  {
+    <li>@e.OccurredAt: <strong>@e.EliminatorEmail</strong> eliminated <strong>@e.VictimEmail</strong> (+@e.PointsAwarded, passcode verified: @e.PasscodeVerified)</li>
+  }
+  </ul>
+}

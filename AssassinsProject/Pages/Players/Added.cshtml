@@ -1,0 +1,13 @@
+@page
+@model AssassinsProject.Pages.Players.AddedModel
+<h1>Player Added</h1>
+<p>Game: @Model.GameId</p>
+<p>Email: @Model.Email</p>
+
+@if (!string.IsNullOrEmpty(Model.NewPasscode))
+{
+  <div class="alert alert-warning">
+    <strong>Passcode (show once):</strong> <code>@Model.NewPasscode</code>
+  </div>
+}
+<p><a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back to Game</a></p>

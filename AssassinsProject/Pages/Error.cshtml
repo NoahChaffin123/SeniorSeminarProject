@@ -1,0 +1,12 @@
+﻿@page
+@model AssassinsProject.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+<h1 class="text-danger">Error</h1>
+<p>Sorry, something went wrong.</p>
+
+@if (Model.ShowRequestId)
+{
+    <p><strong>Request ID:</strong> <code>@Model.RequestId</code></p>
+}

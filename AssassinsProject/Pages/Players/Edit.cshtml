@@ -1,0 +1,82 @@
+@page
+@model AssassinsProject.Pages.Players.EditModel
+@{
+    ViewData["Title"] = "Edit Player";
+}
+<h1>Edit Player</h1>
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" asp-for="GameId" />
+  <input type="hidden" asp-for="Email" />
+
+  <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+  <div class="mb-3">
+    <label class="form-label">Email</label>
+    <input class="form-control" value="@Model.Email" disabled />
+    <div class="form-text">Email is fixed for the game.</div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label asp-for="RealName" class="form-label">Real Name</label>
+      <input asp-for="RealName" class="form-control" />
+      <span asp-validation-for="RealName" class="text-danger"></span>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label asp-for="Alias" class="form-label">Alias</label>
+      <input asp-for="Alias" class="form-control" />
+      <span asp-validation-for="Alias" class="text-danger"></span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label asp-for="HairColor" class="form-label">Hair Color</label>
+      <input asp-for="HairColor" class="form-control" />
+    </div>
+    <div class="col-md-6 mb-3">
+      <label asp-for="EyeColor" class="form-label">Eye Color</label>
+      <input asp-for="EyeColor" class="form-control" />
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label asp-for="VisibleMarkings" class="form-label">Known Visible Markings</label>
+    <textarea asp-for="VisibleMarkings" class="form-control" rows="3"></textarea>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label asp-for="ApproximateAge" class="form-label">Approximate Age</label>
+      <input asp-for="ApproximateAge" class="form-control" type="number" min="10" max="120" />
+    </div>
+    <div class="col-md-6 mb-3">
+      <label asp-for="Specialty" class="form-label">Specialty</label>
+      <input asp-for="Specialty" class="form-control" />
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Current Photo</label><br />
+    @if (!string.IsNullOrEmpty(Model.CurrentPhotoUrl))
+    {
+      <img src="@Model.CurrentPhotoUrl" alt="photo" style="height:80px;width:80px;object-fit:cover;border-radius:8px;" />
+    }
+    else { <em>None</em> }
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Replace Photo (optional)</label>
+    <input type="file" asp-for="Photo" class="form-control" accept="image/*" />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Passcode (read-only)</label>
+    <input class="form-control" value="@(Model.PasscodePlaintext ?? "(not available)")" disabled />
+    <div class="form-text">Admins can view but cannot change the passcode.</div>
+  </div>
+
+  <button class="btn btn-primary" type="submit">Save</button>
+  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Cancel</a>
+</form>

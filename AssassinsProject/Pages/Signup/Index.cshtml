@@ -1,0 +1,75 @@
+@page
+@model AssassinsProject.Pages.Signup.IndexModel
+@{
+    ViewData["Title"] = "Join Game";
+}
+<h1>Join Game</h1>
+
+@if (!Model.IsSignupOpen)
+{
+  <div class="alert alert-warning">
+    Signups are currently <strong>closed</strong> for this game. Please contact the organizer.
+  </div>
+}
+else
+{
+  <p class="text-muted">Use your <strong>&#64;hendrix.edu</strong> email to join this game.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" asp-for="GameId" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="mb-3">
+      <label asp-for="Email" class="form-label">Email</label>
+      <input asp-for="Email" class="form-control" />
+      <div class="form-text">Must be a &#64;hendrix.edu email.</div>
+      <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+      <label asp-for="RealName" class="form-label">Real Name</label>
+      <input asp-for="RealName" class="form-control" />
+      <span asp-validation-for="RealName" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+      <label asp-for="Alias" class="form-label">Alias</label>
+      <input asp-for="Alias" class="form-control" />
+      <span asp-validation-for="Alias" class="text-danger"></span>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label asp-for="HairColor" class="form-label">Hair Color</label>
+        <input asp-for="HairColor" class="form-control" />
+      </div>
+      <div class="col-md-6 mb-3">
+        <label asp-for="EyeColor" class="form-label">Eye Color</label>
+        <input asp-for="EyeColor" class="form-control" />
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label asp-for="VisibleMarkings" class="form-label">Known Visible Markings (Tattoos, scars, etc.)</label>
+      <textarea asp-for="VisibleMarkings" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label asp-for="ApproximateAge" class="form-label">Approximate Age</label>
+        <input asp-for="ApproximateAge" class="form-control" type="number" min="10" max="120" />
+      </div>
+      <div class="col-md-6 mb-3">
+        <label asp-for="Specialty" class="form-label">Specialty</label>
+        <input asp-for="Specialty" class="form-control" />
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Photo (optional)</label>
+      <input type="file" asp-for="Photo" class="form-control" accept="image/*" />
+    </div>
+
+    <button class="btn btn-primary" type="submit">Join</button>
+  </form>
+}

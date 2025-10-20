@@ -1,0 +1,52 @@
+@page
+@model AssassinsProject.Pages.Eliminations.ReportModel
+@{
+    ViewData["Title"] = "Report Elimination";
+}
+<h1>Report Elimination</h1>
+
+<p class="text-muted">
+  Select <strong>your alias</strong> as the eliminator, select your <strong>target’s alias</strong> as the victim,
+  then enter <strong>your passcode</strong> and the <strong>victim’s passcode</strong>.
+  Your passcode prevents someone else from reporting on your behalf.
+</p>
+
+<form method="post">
+  <input type="hidden" asp-for="GameId" />
+  <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+  <div class="mb-3">
+    <label class="form-label">Your Alias (Eliminator)</label>
+    <select asp-for="EliminatorEmail" class="form-select">
+      <option value="">-- select --</option>
+      @foreach (var op in Model.ActivePlayers)
+      {
+        <option value="@op.Email" selected="@(Model.EliminatorEmail == op.Email ? "selected" : null)">@op.Alias</option>
+      }
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Victim (your current target’s Alias)</label>
+    <select asp-for="VictimEmail" class="form-select">
+      <option value="">-- select --</option>
+      @foreach (var op in Model.ActivePlayers)
+      {
+        <option value="@op.Email">@op.Alias</option>
+      }
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Your Passcode</label>
+    <input asp-for="EliminatorPasscode" class="form-control" />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Victim's Passcode</label>
+    <input asp-for="VictimPasscode" class="form-control" />
+  </div>
+
+  <button class="btn btn-danger" type="submit">Confirm Elimination</button>
+  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Cancel</a>
+</form>

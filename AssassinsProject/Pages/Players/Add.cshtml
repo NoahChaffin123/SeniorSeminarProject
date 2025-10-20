@@ -1,0 +1,84 @@
+@page
+@model AssassinsProject.Pages.Players.AddModel
+@{
+    ViewData["Title"] = "Add Player (Admin)";
+}
+<h1>Add Player (Admin)</h1>
+
+@if (!Model.IsSignupOpen)
+{
+  <div class="alert alert-warning">
+    Signups are currently <strong>closed</strong> for this game. Re-open signups from the game page if you need to add players.
+  </div>
+}
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" asp-for="GameId" />
+  <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+  <div class="mb-3">
+    <label asp-for="Email" class="form-label">Email</label>
+    <input asp-for="Email" class="form-control"
+           disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    <div class="form-text">Must be a &#64;hendrix.edu email.</div>
+    <span asp-validation-for="Email" class="text-danger"></span>
+  </div>
+
+  <div class="mb-3">
+    <label asp-for="RealName" class="form-label">Real Name</label>
+    <input asp-for="RealName" class="form-control"
+           disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    <span asp-validation-for="RealName" class="text-danger"></span>
+  </div>
+
+  <div class="mb-3">
+    <label asp-for="Alias" class="form-label">Alias</label>
+    <input asp-for="Alias" class="form-control"
+           disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    <span asp-validation-for="Alias" class="text-danger"></span>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label asp-for="HairColor" class="form-label">Hair Color</label>
+      <input asp-for="HairColor" class="form-control"
+             disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    </div>
+    <div class="col-md-6 mb-3">
+      <label asp-for="EyeColor" class="form-label">Eye Color</label>
+      <input asp-for="EyeColor" class="form-control"
+             disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label asp-for="VisibleMarkings" class="form-label">Known Visible Markings (Tattoos, scars, etc.)</label>
+    <textarea asp-for="VisibleMarkings" class="form-control" rows="3"
+              disabled="@(Model.IsSignupOpen ? null : "disabled")"></textarea>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label asp-for="ApproximateAge" class="form-label">Approximate Age</label>
+      <input asp-for="ApproximateAge" class="form-control" type="number" min="10" max="120"
+             disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    </div>
+    <div class="col-md-6 mb-3">
+      <label asp-for="Specialty" class="form-label">Specialty</label>
+      <input asp-for="Specialty" class="form-control"
+             disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Photo (optional)</label>
+    <input type="file" asp-for="Photo" class="form-control" accept="image/*"
+           disabled="@(Model.IsSignupOpen ? null : "disabled")" />
+  </div>
+
+  <button class="btn btn-primary" type="submit"
+          disabled="@(Model.IsSignupOpen ? null : "disabled")">
+    Add Player
+  </button>
+  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back</a>
+</form>
