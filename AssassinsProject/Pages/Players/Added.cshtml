@@ -1,5 +1,8 @@
 @page
 @model AssassinsProject.Pages.Players.AddedModel
+@{
+    ViewData["Title"] = "Player Added";
+}
 <h1>Player Added</h1>
 <p>Game: @Model.GameId</p>
 <p>Email: @Model.Email</p>
@@ -7,7 +10,18 @@
 @if (!string.IsNullOrEmpty(Model.NewPasscode))
 {
   <div class="alert alert-warning">
-    <strong>Passcode (show once):</strong> <code>@Model.NewPasscode</code>
+    <strong>Your Passcode (save this now; it won't be shown again):</strong>
+    <code>@Model.NewPasscode</code>
   </div>
 }
+
+@if (!string.IsNullOrEmpty(Model.ReportUrl))
+{
+  <div class="alert alert-info">
+    <div><strong>Your reporting link (bookmark this):</strong></div>
+    <div><a href="@Model.ReportUrl">@Model.ReportUrl</a></div>
+    <small class="text-muted">This preselects your email on the Report form.</small>
+  </div>
+}
+
 <p><a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back to Game</a></p>

@@ -3,80 +3,128 @@
 @{
     ViewData["Title"] = "Edit Player";
 }
+
 <h1>Edit Player</h1>
 
-<form method="post" enctype="multipart/form-data">
+<form method="post" enctype="multipart/form-data" class="mb-4">
   <input type="hidden" asp-for="GameId" />
   <input type="hidden" asp-for="Email" />
-
   <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
-  <div class="mb-3">
-    <label class="form-label">Email</label>
-    <input class="form-control" value="@Model.Email" disabled />
-    <div class="form-text">Email is fixed for the game.</div>
-  </div>
-
   <div class="row">
-    <div class="col-md-6 mb-3">
-      <label asp-for="RealName" class="form-label">Real Name</label>
-      <input asp-for="RealName" class="form-control" />
-      <span asp-validation-for="RealName" class="text-danger"></span>
+    <div class="col-md-5">
+      <label class="form-label">Current Photo</label>
+
+      <style>
+        /* Large square display for player pictures */
+        .avatar-lg {
+            width: 320px;
+            height: 320px;
+            border-radius: 12px;     /* keep it square with slightly rounded corners */
+            object-fit: cover;       /* crop visually to a square while preserving center */
+            object-position: center; /* center the crop */
+            border: 2px solid #ddd;
+            background: #f8f9fa;
+            display: block;
+        }
+      </style>
+
+      <div class="mb-2">
+        @if (!string.IsNullOrEmpty(Model.CurrentPhotoUrl))
+        {
+            <img id="photoPreview" src="@Model.CurrentPhotoUrl" alt="Player photo" class="avatar-lg" />
+        }
+        else
+        {
+            <img id="photoPreview" src="data:image/svg+xml;utf8,
+              <svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'>
+                <rect width='100%%' height='100%%' fill='%23f0f0f0'/>
+                <text x='50%%' y='50%%' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-size='18'>
+                  No photo
+                </text>
+              </svg>" class="avatar-lg" alt="No photo" />
+        }
+      </div>
+
+      <div class="mb-3">
+        <label for="Photo" class="form-label">Choose New Photo</label>
+        <input id="Photo" type="file" class="form-control" name="Photo" accept="image/*" />
+      </div>
+
+      <script>
+        // Live preview when selecting a new image
+        (function () {
+          const input = document.getElementById('Photo');
+          const preview = document.getElementById('photoPreview');
+          if (!input || !preview) return;
+
+          input.addEventListener('change', function (e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+              preview.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+          });
+        })();
+      </script>
     </div>
-    <div class="col-md-6 mb-3">
-      <label asp-for="Alias" class="form-label">Alias</label>
-      <input asp-for="Alias" class="form-control" />
-      <span asp-validation-for="Alias" class="text-danger"></span>
+
+    <div class="col-md-7">
+      <div class="mb-3">
+        <label asp-for="RealName" class="form-label">Real Name</label>
+        <input asp-for="RealName" class="form-control" />
+        <span asp-validation-for="RealName" class="text-danger"></span>
+      </div>
+
+      <div class="mb-3">
+        <label asp-for="Alias" class="form-label">Alias</label>
+        <input asp-for="Alias" class="form-control" />
+        <span asp-validation-for="Alias" class="text-danger"></span>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label asp-for="HairColor" class="form-label">Hair Color</label>
+          <input asp-for="HairColor" class="form-control" />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label asp-for="EyeColor" class="form-label">Eye Color</label>
+          <input asp-for="EyeColor" class="form-control" />
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label asp-for="VisibleMarkings" class="form-label">Known Visible Markings (Tattoos, scars, etc.)</label>
+        <textarea asp-for="VisibleMarkings" class="form-control" rows="3"></textarea>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label asp-for="ApproximateAge" class="form-label">Approximate Age</label>
+          <input asp-for="ApproximateAge" class="form-control" type="number" min="10" max="120" />
+        </div>
+        <div class="col-md-6 mb-3">
+          <label asp-for="Specialty" class="form-label">Specialty</label>
+          <input asp-for="Specialty" class="form-control" />
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Passcode</label><br />
+        <input class="form-control" value="@Model.PasscodePlaintextDisplay" readonly />
+        <div class="form-text">Admins can view but not edit the passcode.</div>
+      </div>
+
+      <div class="mt-4">
+        <button class="btn btn-primary" type="submit">Save Changes</button>
+        <a class="btn btn-secondary ms-2" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back</a>
+      </div>
     </div>
   </div>
-
-  <div class="row">
-    <div class="col-md-6 mb-3">
-      <label asp-for="HairColor" class="form-label">Hair Color</label>
-      <input asp-for="HairColor" class="form-control" />
-    </div>
-    <div class="col-md-6 mb-3">
-      <label asp-for="EyeColor" class="form-label">Eye Color</label>
-      <input asp-for="EyeColor" class="form-control" />
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label asp-for="VisibleMarkings" class="form-label">Known Visible Markings</label>
-    <textarea asp-for="VisibleMarkings" class="form-control" rows="3"></textarea>
-  </div>
-
-  <div class="row">
-    <div class="col-md-6 mb-3">
-      <label asp-for="ApproximateAge" class="form-label">Approximate Age</label>
-      <input asp-for="ApproximateAge" class="form-control" type="number" min="10" max="120" />
-    </div>
-    <div class="col-md-6 mb-3">
-      <label asp-for="Specialty" class="form-label">Specialty</label>
-      <input asp-for="Specialty" class="form-control" />
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Current Photo</label><br />
-    @if (!string.IsNullOrEmpty(Model.CurrentPhotoUrl))
-    {
-      <img src="@Model.CurrentPhotoUrl" alt="photo" style="height:80px;width:80px;object-fit:cover;border-radius:8px;" />
-    }
-    else { <em>None</em> }
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Replace Photo (optional)</label>
-    <input type="file" asp-for="Photo" class="form-control" accept="image/*" />
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Passcode (read-only)</label>
-    <input class="form-control" value="@(Model.PasscodePlaintext ?? "(not available)")" disabled />
-    <div class="form-text">Admins can view but cannot change the passcode.</div>
-  </div>
-
-  <button class="btn btn-primary" type="submit">Save</button>
-  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Cancel</a>
 </form>
+
+@section Scripts {
+  <partial name="_ValidationScriptsPartial" />
+}

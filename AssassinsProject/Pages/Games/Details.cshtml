@@ -58,25 +58,88 @@
   <a class="btn btn-secondary ms-2" asp-page="/Players/Add" asp-route-gameId="@g.Id">Add Player (admin)</a>
   <a class="btn btn-outline-primary ms-2" asp-page="/Signup/Index" asp-route-gameId="@g.Id">Open Signup</a>
 }
+else if (g.Status == AssassinsProject.Models.GameStatus.Completed)
+{
+  <!-- Completed -->
+  <div class="alert alert-info mt-2">
+    This game has ended.
+  </div>
+  <a class="btn btn-secondary" asp-page="/Players/Add" asp-route-gameId="@g.Id">Add Player (admin)</a>
+}
 else
 {
+  <!-- Any running/active state that's not Setup or Completed -->
   <a class="btn btn-secondary" asp-page="/Players/Add" asp-route-gameId="@g.Id">Add Player (admin)</a>
   <a class="btn btn-primary ms-2" asp-page="/Eliminations/Report" asp-route-gameId="@g.Id">Report Elimination</a>
+
+  <form method="post" asp-page-handler="End" class="d-inline ms-2">
+    <button class="btn btn-danger"
+            onclick="return confirm('End the game now? This will mark the game as Completed and close signups.');">
+      End Game
+    </button>
+  </form>
 }
 
 <h2 class="mt-4">Active Ring</h2>
 @if (Model.ActivePlayers.Count == 0) { <p>No active players.</p> }
 else
 {
-  <ul>
+  <style>
+    /* Larger, round player photos */
+    .player-avatar {
+        height: 96px;
+        width: 96px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid #ddd;
+        margin: 0 8px 0 0;
+    }
+    /* Target image now same size as eliminator image */
+    .target-avatar {
+        height: 96px;
+        width: 96px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid #ddd;
+        margin: 0 8px;
+        vertical-align: middle;
+    }
+    .pair-line { margin-bottom: .75rem; }
+  </style>
+
+  <ul class="list-unstyled">
   @foreach (var p in Model.ActivePlayers)
   {
-    <li>
-      <strong>@p.DisplayName</strong>
-      @if (!string.IsNullOrEmpty(p.PhotoUrl))
-      { <img src="@p.PhotoUrl" alt="photo" style="height:36px;width:36px;object-fit:cover;border-radius:50%;margin-left:8px;" /> }
-      → <em>@(p.TargetEmail ?? "(none)")</em>
-    </li>
+      var target = (p.TargetEmail != null && Model.PlayersByEmail.TryGetValue(p.TargetEmail, out var t))
+                   ? t
+                   : null;
+
+      string FormatPlayer(AssassinsProject.Models.Player pl) =>
+          $"{(string.IsNullOrWhiteSpace(pl.RealName) ? pl.DisplayName : pl.RealName)} ({pl.Alias} : {pl.Email})";
+
+      <li class="pair-line d-flex align-items-center">
+        @if (!string.IsNullOrEmpty(p.PhotoUrl))
+        {
+          <img src="@p.PhotoUrl" alt="photo of @p.DisplayName" class="player-avatar" />
+        }
+        <div class="flex-grow-1">
+          <div>
+            @FormatPlayer(p) →
+            @if (target is null)
+            {
+              <span>(none)</span>
+            }
+            else
+            {
+              if (!string.IsNullOrEmpty(target.PhotoUrl))
+              {
+                <img src="@target.PhotoUrl" alt="photo of @target.DisplayName" class="target-avatar" />
+              }
+              @FormatPlayer(target)
+            }
+          </div>
+        </div>
+      </li>
   }
   </ul>
 }
@@ -85,13 +148,27 @@ else
 <table class="table">
   <thead><tr><th>Player</th><th>Points</th><th>Status</th><th>Admin</th></tr></thead>
   <tbody>
-  @foreach (var p in Model.AllPlayers)
+  @foreach (var p in Model.ScoreboardPlayers)
   {
     <tr class="@(p.IsActive ? "" : "table-secondary")">
-      <td>@p.DisplayName (@p.Email)</td>
+      <td>
+        <div class="d-flex align-items-center">
+          @if (!string.IsNullOrEmpty(p.PhotoUrl))
+          {
+            <img src="@p.PhotoUrl" alt="photo of @p.DisplayName"
+                 style="height:56px;width:56px;object-fit:cover;border-radius:50%;border:1px solid #ddd;margin-right:10px;" />
+          }
+          <div>
+            <div>
+              <strong>@(string.IsNullOrWhiteSpace(p.RealName) ? p.DisplayName : p.RealName)</strong>
+              <small class="text-muted">(@p.Alias : @p.Email)</small>
+            </div>
+          </div>
+        </div>
+      </td>
       <td>@p.Points</td>
       <td>@(p.IsActive ? "Active" : "Eliminated")</td>
-      <td>
+      <td class="text-nowrap">
         <a class="btn btn-sm btn-outline-secondary"
            asp-page="/Players/Edit"
            asp-route-gameId="@g.Id"

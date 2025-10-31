@@ -1,0 +1,83 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = AssassinsProject
+build_property.RootNamespace = AssassinsProject
+build_property.ProjectDir = C:\Users\noahc\OneDrive\Desktop\FallSemester2026\Senior Seminar\SeniorSeminarProject\Assassinsproject\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\Users\noahc\OneDrive\Desktop\FallSemester2026\Senior Seminar\SeniorSeminarProject\Assassinsproject
+build_property._RazorSourceGeneratorDebug = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Eliminations/Report.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRWxpbWluYXRpb25zXFJlcG9ydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Error.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRXJyb3IuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Games/Create.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcR2FtZXNcQ3JlYXRlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Games/Details.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcR2FtZXNcRGV0YWlscy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Games/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcR2FtZXNcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Players/Add.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGxheWVyc1xBZGQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Players/Added.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGxheWVyc1xBZGRlZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Players/Edit.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGxheWVyc1xFZGl0LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Players/Remove.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGxheWVyc1xSZW1vdmUuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Privacy.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUHJpdmFjeS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Shared/_ValidationScriptsPartial.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Signup/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2lnbnVwXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcX1ZpZXdTdGFydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/Assassinsproject/Pages/Shared/_Layout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9MYXlvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = b-zzf2tu2wnb

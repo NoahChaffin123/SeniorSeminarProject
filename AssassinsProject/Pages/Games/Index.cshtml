@@ -2,42 +2,47 @@
 @model AssassinsProject.Pages.Games.IndexModel
 @{
     ViewData["Title"] = "Games";
+    string FormatDate(DateTimeOffset? dt) => dt.HasValue ? dt.Value.ToLocalTime().ToString("g") : "—";
 }
+
 <h1>Games</h1>
 
 <p>
-    <a class="btn btn-success" asp-page="/Games/Create">Create Game</a>
+    <a class="btn btn-primary" asp-page="Create">Create Game</a>
 </p>
 
-@if (Model.Games.Count == 0)
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Ended</th>
+            <th class="text-end">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var g in Model.Games)
 {
-    <div class="alert alert-info">No games yet.</div>
+        <tr class="@(g.Status == AssassinsProject.Models.GameStatus.Completed ? "table-light" : "")">
+            <td>
+                <a asp-page="Details" asp-route-id="@g.Id">@g.Name</a>
+            </td>
+            <td>@g.Status</td>
+            <td>@FormatDate(g.StartedAt)</td>
+            <td>@FormatDate(g.EndedAt)</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-primary" asp-page="Details" asp-route-id="@g.Id">Open</a>
+
+                <form method="post"
+                      asp-page-handler="Delete"
+                      asp-route-id="@g.Id"
+                      class="d-inline"
+                      onsubmit="return confirm('Delete this game and all of its players and eliminations? This cannot be undone.');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
 }
-else
-{
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Ended</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var g in Model.Games)
-        {
-            <tr>
-                <td>@g.Name</td>
-                <td>@g.Status</td>
-                <td>@(g.StartedAt?.ToLocalTime().ToString("g") ?? "—")</td>
-                <td>@(g.EndedAt?.ToLocalTime().ToString("g") ?? "—")</td>
-                <td class="text-end">
-                    <a class="btn btn-sm btn-primary" asp-page="/Games/Details" asp-route-id="@g.Id">Open</a>
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
+    </tbody>
+</table>

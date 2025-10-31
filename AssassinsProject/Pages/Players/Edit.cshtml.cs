@@ -1,17 +1,23 @@
 using AssassinsProject.Data;
 using AssassinsProject.Services;
-using AssassinsProject.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssassinsProject.Pages.Players;
 
-public class EditModel(AppDbContext db, FileStorageService storage) : PageModel
+public class EditModel : PageModel
 {
-    private readonly AppDbContext _db = db;
-    private readonly FileStorageService _storage = storage;
+    private readonly AppDbContext _db;
+    private readonly FileStorageService _storage;
 
+    public EditModel(AppDbContext db, FileStorageService storage)
+    {
+        _db = db;
+        _storage = storage;
+    }
+
+    // Route/key
     [BindProperty(SupportsGet = true)] public int GameId { get; set; }
     [BindProperty(SupportsGet = true)] public string Email { get; set; } = "";
 
@@ -24,75 +30,112 @@ public class EditModel(AppDbContext db, FileStorageService storage) : PageModel
     [BindProperty] public int? ApproximateAge { get; set; }
     [BindProperty] public string? Specialty { get; set; }
 
+    // Photo upload
     [BindProperty] public IFormFile? Photo { get; set; }
-
-    // Read-only display
     public string? CurrentPhotoUrl { get; set; }
-    public string? PasscodePlaintext { get; set; }
+
+    // Display-only (admin can see, not edit)
+    public string PasscodePlaintextDisplay { get; set; } = "";
+
+    // Non-editable helpers
+    public string DisplayName { get; set; } = "";
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var p = await _db.Players.SingleOrDefaultAsync(x => x.GameId == GameId && x.Email == Email);
-        if (p is null) return NotFound();
+        if (string.IsNullOrWhiteSpace(Email))
+            return NotFound();
 
-        RealName = p.RealName;
-        Alias = p.Alias;
-        HairColor = p.HairColor;
-        EyeColor = p.EyeColor;
-        VisibleMarkings = p.VisibleMarkings;
-        ApproximateAge = p.ApproximateAge;
-        Specialty = p.Specialty;
+        var player = await _db.Players
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.GameId == GameId && p.Email == Email);
 
-        CurrentPhotoUrl = p.PhotoUrl;
-        PasscodePlaintext = p.PasscodePlaintext; // may be null for older records
+        if (player is null) return NotFound();
+
+        // Populate form fields
+        RealName = player.RealName ?? player.DisplayName ?? "";
+        Alias = player.Alias ?? "";
+        HairColor = player.HairColor;
+        EyeColor = player.EyeColor;
+        VisibleMarkings = player.VisibleMarkings;
+        ApproximateAge = player.ApproximateAge;
+        Specialty = player.Specialty;
+        CurrentPhotoUrl = player.PhotoUrl;
+        DisplayName = player.DisplayName ?? player.Email;
+
+        // Admin can view plain passcode if stored
+        PasscodePlaintextDisplay = string.IsNullOrWhiteSpace(player.PasscodePlaintext)
+            ? "(not set)"
+            : player.PasscodePlaintext;
 
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var p = await _db.Players.SingleOrDefaultAsync(x => x.GameId == GameId && x.Email == Email);
-        if (p is null) return NotFound();
+        if (string.IsNullOrWhiteSpace(Email))
+            return NotFound();
 
+        var player = await _db.Players
+            .FirstOrDefaultAsync(p => p.GameId == GameId && p.Email == Email);
+
+        if (player is null) return NotFound();
+
+        // Basic validation
         if (string.IsNullOrWhiteSpace(RealName))
-            ModelState.AddModelError(nameof(RealName), "Real name is required.");
+            ModelState.AddModelError(nameof(RealName), "Real Name is required.");
         if (string.IsNullOrWhiteSpace(Alias))
             ModelState.AddModelError(nameof(Alias), "Alias is required.");
 
-        // Alias uniqueness check if changed
-        if (!string.Equals(p.Alias, Alias, StringComparison.Ordinal))
-        {
-            var taken = await _db.Players.AnyAsync(x => x.GameId == GameId && x.Alias == Alias && x.Email != p.Email);
-            if (taken)
-                ModelState.AddModelError(nameof(Alias), "That alias is already taken in this game.");
-        }
-
         if (!ModelState.IsValid)
         {
-            CurrentPhotoUrl = p.PhotoUrl;
-            PasscodePlaintext = p.PasscodePlaintext;
+            // Rehydrate display-only props for redisplay
+            CurrentPhotoUrl = player.PhotoUrl;
+            PasscodePlaintextDisplay = string.IsNullOrWhiteSpace(player.PasscodePlaintext)
+                ? "(not set)"
+                : player.PasscodePlaintext;
+            DisplayName = player.DisplayName ?? player.Email;
             return Page();
         }
 
-        p.RealName = RealName;
-        p.Alias = Alias;
-        p.DisplayName = Alias; // keep display name in sync with alias
-        p.HairColor = HairColor;
-        p.EyeColor = EyeColor;
-        p.VisibleMarkings = VisibleMarkings;
-        p.ApproximateAge = ApproximateAge;
-        p.Specialty = Specialty;
+        // Update editable fields
+        player.RealName = RealName;
+        player.Alias = Alias;
+        player.HairColor = HairColor;
+        player.EyeColor = EyeColor;
+        player.VisibleMarkings = VisibleMarkings;
+        player.ApproximateAge = ApproximateAge;
+        player.Specialty = Specialty;
 
+        // If a new photo was uploaded, save it and update URL/content-type
         if (Photo is not null && Photo.Length > 0)
         {
-            var norm = EmailNormalizer.Normalize(Email);
-            var saved = await _storage.SavePlayerPhotoAsync(GameId, norm, Photo);
-            p.PhotoUrl = saved.url;
-            p.PhotoContentType = saved.contentType;
-            p.PhotoBytesSha256 = saved.sha256;
+            var saved = await _storage.SavePlayerPhotoAsync(GameId, player.EmailNormalized, Photo);
+            player.PhotoUrl = saved.url;
+            player.PhotoContentType = saved.contentType;
+            // Removed: player.PhotoSha256 (your model doesn't have this property)
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            // Likely unique index violation on (GameId, Alias)
+            if (ex.InnerException?.Message.Contains("IX_Players_GameId_Alias", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                ModelState.AddModelError(nameof(Alias), "That alias is already in use in this game.");
+                // Rehydrate display-only props for redisplay
+                CurrentPhotoUrl = player.PhotoUrl;
+                PasscodePlaintextDisplay = string.IsNullOrWhiteSpace(player.PasscodePlaintext)
+                    ? "(not set)"
+                    : player.PasscodePlaintext;
+                DisplayName = player.DisplayName ?? player.Email;
+                return Page();
+            }
+            throw;
+        }
+
         return RedirectToPage("/Games/Details", new { id = GameId });
     }
 }

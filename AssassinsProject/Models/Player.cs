@@ -39,6 +39,6 @@ public class Player
     public int PasscodeCost { get; set; } = 100_000;
     public DateTimeOffset PasscodeSetAt { get; set; } = DateTimeOffset.UtcNow;
 
-    // WARNING: This is stored to allow admins to view the code; consider encrypting or adopting a flow.
+    // WARNING: This is stored to allow admins to view the code; consider encrypting or adopting a regenerate flow.
     public string? PasscodePlaintext { get; set; }
 }
