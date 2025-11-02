@@ -196,6 +196,9 @@ public class GameService(AppDbContext db)
         var game = await _db.Games.Include(g => g.Players).SingleAsync(g => g.Id == gameId, ct);
         if (game.Status != GameStatus.Active) throw new InvalidOperationException("Game is not active.");
 
+        // NEW: block eliminations while paused
+        if (game.IsPaused) throw new InvalidOperationException("Game is paused. Eliminations are temporarily disabled.");
+
         var eliminator = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == eliminatorEmail, ct);
         var victim = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == victimEmail, ct);
 

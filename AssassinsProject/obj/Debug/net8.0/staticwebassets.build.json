@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "0/TPXiQa7nIXdnmnOxdjXwEfHoythR96uva4tSpi5Gg=",
+  "Hash": "ZWIMpyahhVK/TfKNF88oNR7UE/bvmvqxhNejolvqXF4=",
   "Source": "AssassinsProject",
   "BasePath": "_content/AssassinsProject",
   "Mode": "Default",
@@ -1744,6 +1744,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\uploads\\5\\tigertrout@hendrix.edu.png"
+    },
+    {
+      "Identity": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\7\\noah@hendrix.edu.png",
+      "SourceId": "AssassinsProject",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\",
+      "BasePath": "_content/AssassinsProject",
+      "RelativePath": "uploads/7/noah@hendrix.edu.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\uploads\\7\\noah@hendrix.edu.png"
     }
   ]
 }

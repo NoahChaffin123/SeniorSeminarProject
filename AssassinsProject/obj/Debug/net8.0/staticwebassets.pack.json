@@ -361,6 +361,10 @@
       "PackagePath": "staticwebassets\\uploads\\5\\tigertrout@hendrix.edu.png"
     },
     {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\7\\noah@hendrix.edu.png",
+      "PackagePath": "staticwebassets\\uploads\\7\\noah@hendrix.edu.png"
+    },
+    {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.AssassinsProject.Microsoft.AspNetCore.StaticWebAssets.props",
       "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
     },

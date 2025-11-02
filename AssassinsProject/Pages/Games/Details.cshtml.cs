@@ -140,4 +140,28 @@ public class DetailsModel : PageModel
         await _db.SaveChangesAsync();
         return await OnGetAsync(Id);
     }
+
+    // NEW: Pause the game (only while Active)
+    public async Task<IActionResult> OnPostPauseAsync()
+    {
+        var g = await _db.Games.FindAsync(Id);
+        if (g is null) return NotFound();
+        if (g.Status != GameStatus.Active) return BadRequest("Game is not active.");
+
+        g.IsPaused = true;
+        await _db.SaveChangesAsync();
+        return await OnGetAsync(Id);
+    }
+
+    // NEW: Unpause (resume) the game
+    public async Task<IActionResult> OnPostUnpauseAsync()
+    {
+        var g = await _db.Games.FindAsync(Id);
+        if (g is null) return NotFound();
+        if (g.Status != GameStatus.Active) return BadRequest("Game is not active.");
+
+        g.IsPaused = false;
+        await _db.SaveChangesAsync();
+        return await OnGetAsync(Id);
+    }
 }

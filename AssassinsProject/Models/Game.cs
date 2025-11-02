@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace AssassinsProject.Models;
 
 public enum GameStatus
@@ -19,6 +22,9 @@ public class Game
 
     // Roster lock: open/close signups while in Setup
     public bool IsSignupOpen { get; set; } = true;
+
+    // NEW: soft pause while Active — blocks eliminations
+    public bool IsPaused { get; set; } = false;
 
     // Navigation
     public ICollection<Player> Players { get; set; } = new List<Player>();
