@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "QyfJPT9Xko3PtVs1I7ZcGBj+UqbLSdcv9kLrFcKpEIMRgmznPqTGTQopNq0HYImoMj5G8HBr8rKQSXj0EXtevw==",
+  "dgSpecHash": "vI1JLACw3x6NUQXrQGDhrvXVDyfLD59coF2QNh0YQfqKN9NlvUkT7HzTvjOqrv72w0AMLwW+nAMFKN17chIaKQ==",
   "success": true,
-  "projectFilePath": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\AssassinsProject.csproj",
+  "projectFilePath": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\assassinsproject\\AssassinsProject.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\noahc\\.nuget\\packages\\azure.core\\1.35.0\\azure.core.1.35.0.nupkg.sha512",
     "C:\\Users\\noahc\\.nuget\\packages\\azure.identity\\1.10.3\\azure.identity.1.10.3.nupkg.sha512",
