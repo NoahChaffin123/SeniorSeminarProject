@@ -9,16 +9,17 @@ env:
   PROJECT_PATH: AssassinsProject/AssassinsProject.csproj
   PUBLISH_DIR: ${{ github.workspace }}/publish
   DOTNET_VERSION: '8.0.x'
-  AZURE_WEBAPP_NAME: assassins-game   # exact Azure Web App name
+  AZURE_WEBAPP_NAME: assassins-game   
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: windows-latest
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
@@ -38,5 +39,6 @@ jobs:
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: ${{ env:PUBLISH_DIR }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}   
+          package: ${{ env.PUBLISH_DIR }}
+       
