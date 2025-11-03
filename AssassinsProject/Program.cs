@@ -1,48 +1,46 @@
+using System;
 using AssassinsProject.Data;
 using AssassinsProject.Services;
+using AssassinsProject.Services.Email;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Razor Pages
-// In Development, also enable runtime compilation so .cshtml edits are hot-reloaded without rebuilds.
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services
-        .AddRazorPages()
-        .AddRazorRuntimeCompilation(); // optional, requires package below
-}
-else
-{
-    builder.Services.AddRazorPages();
-}
-
-// EF Core DbContext
+// ---------- Database ----------
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+{
+    var conn = builder.Configuration.GetConnectionString("Default")
+               ?? throw new InvalidOperationException("Missing connection string 'Default'.");
+    opt.UseSqlServer(conn, o => o.EnableRetryOnFailure());
+});
 
-// App services
-builder.Services.AddScoped<GameService>();
-builder.Services.AddScoped<FileStorageService>();
+// ---------- Razor Pages ----------
+builder.Services.AddRazorPages();
+
+// ---------- App Services ----------
+builder.Services.AddScoped<GameService>();            
+builder.Services.AddSingleton<FileStorageService>();  
+
+// Email sender via IConfiguration (uses Azure.Communication.Email)
+builder.Services.AddSingleton<IEmailSender, AzureEmailSender>();
 
 var app = builder.Build();
 
-// Static files
-app.UseStaticFiles();
-
-// Error pages
-if (app.Environment.IsDevelopment())
+using (var scope = app.Services.CreateScope())
 {
-    app.UseDeveloperExceptionPage();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
 }
-else
+
+if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
-// HTTP pipeline
 app.UseHttpsRedirection();
+app.UseStaticFiles();
+
 app.UseRouting();
 
 app.MapRazorPages();

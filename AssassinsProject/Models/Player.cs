@@ -20,6 +20,7 @@ public class Player
     public string? Specialty { get; set; }
 
     // Game state
+    // NOTE: new signups will be IsActive=false until they verify email.
     public bool IsActive { get; set; } = true;
     public int Points { get; set; } = 0;
 
@@ -27,7 +28,7 @@ public class Player
     public Player? Target { get; set; }
     public ICollection<Player> Hunters { get; set; } = new List<Player>();
 
-    // Photo metadata
+    // Photos (optional)
     public string? PhotoUrl { get; set; }
     public string? PhotoContentType { get; set; }
     public byte[]? PhotoBytesSha256 { get; set; }
@@ -41,4 +42,11 @@ public class Player
 
     // WARNING: This is stored to allow admins to view the code; consider encrypting or adopting a regenerate flow.
     public string? PasscodePlaintext { get; set; }
+
+    // ------------------------------
+    // Email verification (NEW)
+    // ------------------------------
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+    public string? EmailVerifyToken { get; set; }
+    public DateTimeOffset? EmailVerifyTokenExpiresAt { get; set; }
 }
