@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  # 👇 point this to your actual .csproj (in the subfolder)
   PROJECT_PATH: AssassinsProject/AssassinsProject.csproj
   PUBLISH_DIR: ${{ github.workspace }}/publish
   DOTNET_VERSION: "8.0.x"
