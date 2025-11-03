@@ -3,84 +3,75 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
-namespace AssassinsProject.Pages.Signup;
-
-public class VerifyModel : PageModel
+namespace AssassinsProject.Pages.Signup
 {
-    private readonly AppDbContext _db;
-    public VerifyModel(AppDbContext db) => _db = db;
-
-    [BindProperty(SupportsGet = true)]
-    public int GameId { get; set; }
-
-    [BindProperty(SupportsGet = true)]
-    public string Email { get; set; } = "";
-
-    [BindProperty(SupportsGet = true)]
-    public string Token { get; set; } = "";
-
-    public bool Success { get; private set; }
-    public string? Message { get; private set; }
-
-    public async Task<IActionResult> OnGetAsync()
+    public class VerifyModel : PageModel
     {
-        if (GameId <= 0 || string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+        private readonly AppDbContext _db;
+
+        public VerifyModel(AppDbContext db)
         {
-            Success = false;
-            Message = "Invalid verification link.";
-            return Page();
+            _db = db;
         }
 
-        var emailNorm = Email.Trim().ToLowerInvariant();
-        var now = DateTimeOffset.UtcNow;
+        [BindProperty(SupportsGet = true)]
+        public int GameId { get; set; }
 
-        var player = await _db.Players
-            .FirstOrDefaultAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm);
+        [BindProperty(SupportsGet = true)]
+        public string Email { get; set; } = string.Empty;
 
-        if (player is null)
+        [BindProperty(SupportsGet = true)]
+        public string Token { get; set; } = string.Empty;
+
+        public string? Message { get; private set; }
+        public bool Success { get; private set; }
+
+        public async Task<IActionResult> OnGetAsync()
         {
-            Success = false;
-            Message = "No signup found for this email.";
-            return Page();
-        }
+            if (GameId <= 0 || string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+            {
+                Message = "Invalid verification link.";
+                Success = false;
+                return Page();
+            }
 
-        if (player.EmailVerifiedAt is not null)
-        {
+            var emailNorm = Email.Trim().ToLowerInvariant();
+
+            var player = await _db.Players
+                .FirstOrDefaultAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm);
+
+            if (player is null)
+            {
+                Message = "No signup found for this email.";
+                Success = false;
+                return Page();
+            }
+
+            if (player.EmailVerifyToken != Token)
+            {
+                Message = "Verification token is invalid.";
+                Success = false;
+                return Page();
+            }
+
+            if (player.EmailVerifyTokenExpiresAt is DateTimeOffset exp && exp < DateTimeOffset.UtcNow)
+            {
+                Message = "Verification link has expired. Please sign up again.";
+                Success = false;
+                return Page();
+            }
+
+            // Activate player
+            player.IsActive = true;
+            player.EmailVerifiedAt = DateTimeOffset.UtcNow;
+            player.EmailVerifyToken = null;
+            player.EmailVerifyTokenExpiresAt = null;
+
+            await _db.SaveChangesAsync();
+
             Success = true;
-            Message = "This email is already verified.";
+            Message = "Your email has been verified. You’re in!";
             return Page();
         }
-
-        if (player.EmailVerifyToken is null ||
-            !TimeConstantEquals(player.EmailVerifyToken, Token) ||
-            player.EmailVerifyTokenExpiresAt is null ||
-            now > player.EmailVerifyTokenExpiresAt.Value)
-        {
-            Success = false;
-            Message = "Verification link is invalid or expired.";
-            return Page();
-        }
-
-        // Mark verified + activate the player.
-        player.EmailVerifiedAt = now;
-        player.EmailVerifyToken = null;
-        player.EmailVerifyTokenExpiresAt = null;
-        player.IsActive = true;
-
-        await _db.SaveChangesAsync();
-
-        Success = true;
-        Message = "Email verified! You are now in the game.";
-        return Page();
-    }
-
-    // Constant-time compare to avoid timing leaks on tokens
-    private static bool TimeConstantEquals(string a, string b)
-    {
-        if (a.Length != b.Length) return false;
-        var diff = 0;
-        for (int i = 0; i < a.Length; i++)
-            diff |= a[i] ^ b[i];
-        return diff == 0;
     }
 }
