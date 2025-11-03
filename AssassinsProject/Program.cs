@@ -1,4 +1,3 @@
-using System;
 using AssassinsProject.Data;
 using AssassinsProject.Services;
 using AssassinsProject.Services.Email;
@@ -6,31 +5,25 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---------- Database ----------
-builder.Services.AddDbContext<AppDbContext>(opt =>
-{
-    var conn = builder.Configuration.GetConnectionString("Default")
-               ?? throw new InvalidOperationException("Missing connection string 'Default'.");
-    opt.UseSqlServer(conn, o => o.EnableRetryOnFailure());
-});
+// Database connection
+var dbConn =
+    builder.Configuration.GetConnectionString("Default")
+    ?? builder.Configuration["ConnectionStrings:Default"];
 
-// ---------- Razor Pages ----------
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(dbConn));
+
+// Options: Email
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+
+// DI registrations
+builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<FileStorageService>();
+builder.Services.AddScoped<IEmailSender, AzureEmailSender>();
+
 builder.Services.AddRazorPages();
 
-// ---------- App Services ----------
-builder.Services.AddScoped<GameService>();            
-builder.Services.AddSingleton<FileStorageService>();  
-
-// Email sender via IConfiguration (uses Azure.Communication.Email)
-builder.Services.AddSingleton<IEmailSender, AzureEmailSender>();
-
 var app = builder.Build();
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
-}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -42,6 +35,8 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.UseAuthorization();
 
 app.MapRazorPages();
 
