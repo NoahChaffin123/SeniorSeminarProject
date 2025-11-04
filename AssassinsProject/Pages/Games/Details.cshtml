@@ -27,7 +27,10 @@
             <label class="form-label">Signup link to share:</label>
             @if (g.Status == AssassinsProject.Models.GameStatus.Setup && g.IsSignupOpen && !string.IsNullOrEmpty(Model.SignupUrl))
             {
-                <input type="text" class="form-control" readonly value="@Model.SignupUrl" />
+                <div class="input-group">
+                    <input id="signupLink" type="text" class="form-control" readonly value="@Model.SignupUrl" />
+                    <button type="button" class="btn btn-outline-secondary" data-copy-target="#signupLink">Copy</button>
+                </div>
             }
             else
             {
@@ -36,7 +39,10 @@
         </div>
         <div class="col-md-6">
             <label class="form-label">Report Elimination link (share with players):</label>
-            <input type="text" class="form-control" readonly value="@Model.ReportUrl" />
+            <div class="input-group">
+                <input id="reportLink" type="text" class="form-control" readonly value="@Model.ReportUrl" />
+                <button type="button" class="btn btn-outline-secondary" data-copy-target="#reportLink">Copy</button>
+            </div>
         </div>
     </div>
 }
@@ -223,4 +229,38 @@ else
             </li>
         }
     </ul>
+}
+
+@section Scripts {
+<script>
+  // One-tap copy 
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-copy-target]');
+    if (!btn) return;
+
+    const sel = btn.getAttribute('data-copy-target');
+    const el = document.querySelector(sel);
+    if (!el) return;
+
+    const text = el.value || el.textContent || '';
+    const flash = () => {
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash).catch(function () {
+        try {
+          el.focus(); el.select(); document.execCommand('copy'); flash();
+        } catch { /* ignore */ }
+      });
+    } else {
+      try {
+        el.focus(); el.select(); document.execCommand('copy'); flash();
+      } catch { /* ignore */ }
+    }
+  }, false);
+</script>
 }
