@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "r3v8/7Y16FYy9QotdtnBLtDkdLptbcJvGk3N0ShO4h6qeHH3zkA0b8JQ6Mam9AAPFBJHSEFSJNdGxOMOTPYYTQ==",
+  "dgSpecHash": "qxuzAB7h3CXTnY9ew5MMMcpNn5Occ0bYYQFvrB/OG4MdEqlgSd+nHNWZLw8rWQ00z7xAUhqdyxaZH3UNmSNrCw==",
   "success": true,
-  "projectFilePath": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\assassinsproject\\AssassinsProject.csproj",
+  "projectFilePath": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\AssassinsProject.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\noahc\\.nuget\\packages\\azure.communication.email\\1.1.0\\azure.communication.email.1.1.0.nupkg.sha512",
     "C:\\Users\\noahc\\.nuget\\packages\\azure.core\\1.49.0\\azure.core.1.49.0.nupkg.sha512",

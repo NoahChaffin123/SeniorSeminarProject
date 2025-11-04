@@ -1,0 +1,14 @@
+@page "{id:int}"
+@model AssassinsProject.Pages.Games.JoinModel
+@{
+    ViewData["Title"] = "Join Game";
+}
+<h2>Join Game</h2>
+<form method="post">
+    <input type="hidden" asp-for="Id" />
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label">Email</label>
+        <input asp-for="Email" class="form-control" />
+    </div>
+    <button class="btn btn-primary" type="submit">Join</button>
+</form>
