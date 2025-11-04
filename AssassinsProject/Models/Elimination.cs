@@ -22,8 +22,8 @@ namespace AssassinsProject.Models
         public DateTimeOffset? VerifiedAt { get; set; }
 
         // These two columns are missing in your database right now:
-        public string? EvidenceUrl { get; set; }      // nvarchar(400) (nullable)
-        public string? Notes { get; set; }            // nvarchar(1000) (nullable)
+        public string? EvidenceUrl { get; set; }     
+        public string? Notes { get; set; }          
 
         // Navigations (optional)
         public Player? Eliminator { get; set; }

@@ -58,8 +58,6 @@ IF COL_LENGTH('Eliminations','VerifiedAt') IS NOT NULL
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Revert back to datetime2 if you ever need to roll back.
-            // (Adjust if your original type was datetime)
             migrationBuilder.Sql(@"
 IF COL_LENGTH('Players','PasscodeSetAt') IS NOT NULL
     ALTER TABLE [Players] ALTER COLUMN [PasscodeSetAt] datetime2(7) NOT NULL;

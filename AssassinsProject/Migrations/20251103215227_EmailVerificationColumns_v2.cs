@@ -93,26 +93,9 @@ namespace AssassinsProject.Migrations
                     table: "Players");
             }
 
-            // Optional: restore previous names if your earlier model relied on them.
-            // Uncomment if needed:
-            // migrationBuilder.AddColumn<DateTime>(
-            //     name: "EmailVerifiedAt",
-            //     table: "Players",
-            //     type: "datetime2",
-            //     nullable: true);
-            // migrationBuilder.AddColumn<string>(
-            //     name: "EmailVerifyToken",
-            //     table: "Players",
-            //     type: "nvarchar(200)",
-            //     nullable: true);
-            // migrationBuilder.AddColumn<DateTime>(
-            //     name: "EmailVerifyTokenExpiresAt",
-            //     table: "Players",
-            //     type: "datetime2",
-            //     nullable: true);
+            
         }
 
-        // Helper: best-effort presence checks to keep this migration idempotent across environments.
         private static bool ColumnExists(MigrationBuilder migrationBuilder, string table, string column)
         {
             // NOTE: EF migrations don’t provide direct metadata checks; this pattern compiles

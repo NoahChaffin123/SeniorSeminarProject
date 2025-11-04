@@ -28,7 +28,7 @@ namespace AssassinsProject.Data
 
                 // Link Eliminations to GameId WITHOUT requiring an Elimination.Game nav
                 e.HasMany(g => g.Eliminations)
-                 .WithOne() // <-- no navigation on Elimination
+                 .WithOne() 
                  .HasForeignKey(el => el.GameId)
                  .OnDelete(DeleteBehavior.Cascade);
             });
@@ -36,7 +36,6 @@ namespace AssassinsProject.Data
             // ---------- PLAYER ----------
             modelBuilder.Entity<Player>(e =>
             {
-                // Composite PK (GameId, Email)
                 e.HasKey(p => new { p.GameId, p.Email });
 
                 e.Property(p => p.Email).HasMaxLength(256).IsRequired();

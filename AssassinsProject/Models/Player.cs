@@ -26,14 +26,13 @@ namespace AssassinsProject.Models
         public DateTimeOffset? VerificationSentAt { get; set; }
         public string? VerificationToken { get; set; }
 
-        // Misc you referenced in logs; keep if you actually use them
         public string? EyeColor { get; set; }
         public string? HairColor { get; set; }
         public int? ApproximateAge { get; set; }
 
         public int Points { get; set; } = 0;
 
-        // Passcode fields (shape inferred from logs; keep if used)
+        // Passcode fields
         public string PasscodeAlgo { get; set; } = "argon2id";
         public int PasscodeCost { get; set; } = 1;
         public byte[] PasscodeHash { get; set; } = Array.Empty<byte>();
@@ -41,7 +40,6 @@ namespace AssassinsProject.Models
         public string? PasscodePlaintext { get; set; }
         public DateTimeOffset PasscodeSetAt { get; set; } = DateTimeOffset.UtcNow;
 
-        // Photos/notes (optional)
         public byte[]? PhotoBytesSha256 { get; set; }
         public string? PhotoContentType { get; set; }
         public string? PhotoUrl { get; set; }

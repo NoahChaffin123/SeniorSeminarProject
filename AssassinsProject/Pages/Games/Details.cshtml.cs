@@ -27,7 +27,7 @@ public class DetailsModel : PageModel
 
     public Game? Game { get; set; }
 
-    // Players
+    // Players (ONLY verified players should surface anywhere on this page)
     public List<Player> AllPlayers { get; set; } = new();
     public List<Player> ActivePlayers { get; set; } = new();
 
@@ -52,8 +52,9 @@ public class DetailsModel : PageModel
         Game = await _db.Games.FirstOrDefaultAsync(g => g.Id == id);
         if (Game is null) return NotFound();
 
+        // IMPORTANT: filter to VERIFIED players only so unverified signups never appear
         AllPlayers = await _db.Players
-            .Where(p => p.GameId == id)
+            .Where(p => p.GameId == id && p.IsEmailVerified)
             .OrderByDescending(p => p.IsActive)
             .ThenBy(p => p.DisplayName)
             .ToListAsync();
@@ -68,7 +69,7 @@ public class DetailsModel : PageModel
             .OrderByDescending(e => e.OccurredAt)
             .ToListAsync();
 
-        // Scoreboard: active players first, then by points (desc), then name
+        // Scoreboard: only verified players, active first, then by points (desc), then name
         ScoreboardPlayers = AllPlayers
             .OrderByDescending(p => p.IsActive)   // true first
             .ThenByDescending(p => p.Points)
@@ -100,7 +101,7 @@ public class DetailsModel : PageModel
     {
         try
         {
-            await _svc.StartGameAsync(Id); // GameService handles validation/assignment and sets StartedAt
+            await _svc.StartGameAsync(Id);
         }
         catch (Exception ex)
         {
@@ -117,7 +118,7 @@ public class DetailsModel : PageModel
 
         g.Status = GameStatus.Completed;
         g.IsSignupOpen = false;
-        g.EndedAt = DateTimeOffset.UtcNow; // stamp an end time
+        g.EndedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync();
         return await OnGetAsync(Id);
@@ -141,7 +142,6 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // NEW: Pause the game (only while Active)
     public async Task<IActionResult> OnPostPauseAsync()
     {
         var g = await _db.Games.FindAsync(Id);
@@ -153,7 +153,6 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // NEW: Unpause (resume) the game
     public async Task<IActionResult> OnPostUnpauseAsync()
     {
         var g = await _db.Games.FindAsync(Id);

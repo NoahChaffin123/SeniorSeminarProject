@@ -31,7 +31,7 @@ END
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Intentionally empty — we never want GameId1 back.
+            // Intentionally empty — we want GameId1 back.
         }
     }
 }

@@ -1,5 +1,8 @@
+using System;
 using System.Threading.Tasks;
 using AssassinsProject.Data;
+using AssassinsProject.Models;
+using AssassinsProject.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -9,75 +12,66 @@ namespace AssassinsProject.Pages.Signup
     public class VerifyModel : PageModel
     {
         private readonly AppDbContext _db;
-        private readonly ILogger<VerifyModel> _logger;
 
-        public VerifyModel(AppDbContext db, ILogger<VerifyModel> logger)
+        public VerifyModel(AppDbContext db)
         {
             _db = db;
-            _logger = logger;
         }
 
+        // bound for the view
         [BindProperty(SupportsGet = true)]
         public int GameId { get; set; }
-
-        [BindProperty(SupportsGet = true)]
-        public string? Email { get; set; }
-
-        [BindProperty(SupportsGet = true)]
-        public string? Token { get; set; }
 
         public bool Verified { get; private set; }
         public string Message { get; private set; } = string.Empty;
 
-        public async Task OnGetAsync()
+        // GET /Signup/Verify?gameId=...&email=...&token=...
+        public async Task<IActionResult> OnGetAsync(int gameId, string email, string token)
         {
-            if (string.IsNullOrWhiteSpace(Email))
+            GameId = gameId;
+
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token))
             {
-                Message = "Missing email.";
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(Token))
-            {
-                // We may land here after redirect from signup, before clicking the email link.
-                Message = "A verification link was sent to your email.";
-                return;
+                Verified = false;
+                Message = "Invalid verification link.";
+                return Page();
             }
 
-            var emailNormalized = Email.Trim().ToUpperInvariant();
+            var emailNorm = EmailNormalizer.Normalize(email);
 
             var player = await _db.Players
-                .FirstOrDefaultAsync(p => p.GameId == GameId &&
-                                          p.EmailNormalized == emailNormalized);
+                .SingleOrDefaultAsync(p => p.GameId == gameId && p.EmailNormalized == emailNorm);
 
-            if (player == null)
+            if (player is null)
             {
-                Message = "Player not found.";
-                return;
+                Verified = false;
+                Message = "Player not found for this game.";
+                return Page();
             }
 
-            if (player.IsEmailVerified)
+            if (!string.Equals(player.VerificationToken ?? "", token, StringComparison.Ordinal))
             {
-                Verified = true;
-                Message = "Your email is already verified. You can join/play now.";
-                return;
+                Verified = false;
+                Message = "Verification token is invalid or has already been used.";
+                return Page();
             }
 
-            if (player.VerificationToken == Token)
-            {
-                player.IsEmailVerified = true;
-                player.IsActive = true; // Admit into game upon verification
-                player.VerificationToken = null;
-                player.VerificationSentAt = null;
+            // Mark verified and allow the player to appear in the game.
+            player.IsEmailVerified = true;
 
-                await _db.SaveChangesAsync();
+            // If you want them to immediately count as “active” in the roster,
+            // set IsActive=true here. If you prefer admins to activate later,
+            // comment the next line out. Requirement says appear only after verify:
+            player.IsActive = true;
 
-                Verified = true;
-                Message = "Email verified! You’re in 🎉";
-            }
-            else
-            {
-                Message = "Invalid or expired verification link.";
-            }
+            // Invalidate token so the link can’t be reused
+            player.VerificationToken = null;
+
+            await _db.SaveChangesAsync();
+
+            Verified = true;
+            Message = "Your email has been verified. You’re in!";
+            return Page();
         }
     }
 }

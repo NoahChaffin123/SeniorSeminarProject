@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;                       // WaitUntil
+using Azure;                       
 using Azure.Communication.Email;
 using Microsoft.Extensions.Configuration;
 

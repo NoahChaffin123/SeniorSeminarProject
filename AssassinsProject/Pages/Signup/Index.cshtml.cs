@@ -1,183 +1,185 @@
+using System;
 using System.ComponentModel.DataAnnotations;
-using System.Security.Cryptography;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
+using AssassinsProject.Services;
 using AssassinsProject.Services.Email;
+using AssassinsProject.Utilities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AssassinsProject.Pages.Signup
 {
     public class IndexModel : PageModel
     {
         private readonly AppDbContext _db;
-        private readonly IEmailSender _emailSender;
+        private readonly FileStorageService _files;
+        private readonly IEmailSender _email;
+        private readonly ILogger<IndexModel> _log;
         private readonly LinkGenerator _linkGenerator;
-        private readonly ILogger<IndexModel> _logger;
 
         public IndexModel(
             AppDbContext db,
-            IEmailSender emailSender,
-            LinkGenerator linkGenerator,
-            ILogger<IndexModel> logger)
+            FileStorageService files,
+            IEmailSender email,
+            ILogger<IndexModel> log,
+            LinkGenerator linkGenerator)
         {
             _db = db;
-            _emailSender = emailSender;
+            _files = files;
+            _email = email;
+            _log = log;
             _linkGenerator = linkGenerator;
-            _logger = logger;
         }
 
-        // You can set this from the querystring or UI; default to the first game if present.
         [BindProperty(SupportsGet = true)]
-        public int? GameId { get; set; }
+        public int GameId { get; set; }
 
-        // Form fields (kept in sync with your .cshtml)
+        public bool IsSignupOpen { get; set; }
+        public Game? Game { get; set; }
+
+        // ===== Form fields =====
         [BindProperty, Required, EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        [BindProperty, Required, StringLength(100)]
-        public string RealName { get; set; } = string.Empty;
+        [BindProperty, StringLength(100)]
+        public string DisplayName { get; set; } = string.Empty;
 
         [BindProperty, Required, StringLength(100)]
         public string Alias { get; set; } = string.Empty;
 
-        [BindProperty]
-        public int? ApproximateAge { get; set; }
+        [BindProperty] public IFormFile? Photo { get; set; }   // REQUIRED (validated below)
 
-        [BindProperty]
-        public string? EyeColor { get; set; }
+        [BindProperty, Required, StringLength(100)] public string RealName { get; set; } = string.Empty;
+        [BindProperty, StringLength(50)]  public string? HairColor { get; set; }
+        [BindProperty, StringLength(50)]  public string? EyeColor { get; set; }
+        [BindProperty, StringLength(200)] public string? VisibleMarkings { get; set; }
+        [BindProperty, Range(0, 120)]     public int?    ApproximateAge { get; set; }
+        [BindProperty, StringLength(200)] public string? Specialty { get; set; }
 
-        [BindProperty]
-        public string? HairColor { get; set; }
-
-        [BindProperty]
-        public string? VisibleMarkings { get; set; }
-
-        [BindProperty]
-        public string? Specialty { get; set; }
-
-        [BindProperty]
-        public IFormFile? Photo { get; set; }
-
-        public bool IsSignupOpen { get; private set; } = true;
-
-        public async Task OnGetAsync()
+        public async Task<IActionResult> OnGetAsync()
         {
-            if (!GameId.HasValue)
-            {
-                var firstGame = await _db.Games.OrderBy(g => g.Id).FirstOrDefaultAsync();
-                GameId = firstGame?.Id;
-            }
+            Game = await _db.Games.AsNoTracking().SingleOrDefaultAsync(g => g.Id == GameId);
+            if (Game is null) return NotFound();
 
-            // Optional: reflect roster lock/open status if your Game has that flag
-            if (GameId.HasValue)
-            {
-                var game = await _db.Games.FindAsync(GameId.Value);
-                if (game != null)
-                {
-                    // If you track IsSignupOpen, use it; otherwise leave true.
-                    var prop = game.GetType().GetProperty("IsSignupOpen");
-                    if (prop != null && prop.PropertyType == typeof(bool))
-                    {
-                        IsSignupOpen = (bool)(prop.GetValue(game) ?? false);
-                    }
-                }
-            }
+            IsSignupOpen = Game.IsSignupOpen && Game.Status == GameStatus.Setup;
+            return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync()
+        public async Task<IActionResult> OnPostAsync(CancellationToken ct)
         {
+            var game = await _db.Games.SingleOrDefaultAsync(g => g.Id == GameId, ct);
+            if (game is null) return NotFound();
+
+            IsSignupOpen = game.IsSignupOpen && game.Status == GameStatus.Setup;
+            if (!IsSignupOpen)
+            {
+                ModelState.AddModelError(string.Empty, "Signups are closed.");
+            }
+
+            // Photo is REQUIRED — capture robustly
+            IFormFile? uploaded = Photo;
+            if (uploaded is null || uploaded.Length == 0)
+            {
+                uploaded = Request.Form.Files.FirstOrDefault(f =>
+                              f.Name.EndsWith(".Photo", StringComparison.OrdinalIgnoreCase) ||
+                              f.Name.Equals("Photo", StringComparison.OrdinalIgnoreCase))
+                           ?? Request.Form.Files.FirstOrDefault();
+            }
+            if (uploaded is null || uploaded.Length == 0)
+            {
+                ModelState.AddModelError(nameof(Photo), "Please choose a player photo.");
+            }
+
+            // Backfill DisplayName when empty
+            if (string.IsNullOrWhiteSpace(DisplayName))
+            {
+                DisplayName = !string.IsNullOrWhiteSpace(RealName)
+                    ? RealName.Trim()
+                    : (Alias ?? string.Empty).Trim();
+                ModelState.Remove(nameof(DisplayName)); // clear binder’s “required” error (if any)
+            }
+
             if (!ModelState.IsValid)
-                return Page();
-
-            if (!GameId.HasValue)
             {
-                ModelState.AddModelError(string.Empty, "No game selected.");
+                foreach (var kv in ModelState)
+                    foreach (var err in kv.Value.Errors)
+                        _log.LogWarning("Signup validation error: key={Key} error={Error}", kv.Key, err.ErrorMessage);
+
+                Game = game;
                 return Page();
             }
 
-            var game = await _db.Games.FindAsync(GameId.Value);
-            if (game == null)
-            {
-                ModelState.AddModelError(string.Empty, "Game not found.");
-                return Page();
-            }
+            // Normalize email
+            var emailNorm = EmailNormalizer.Normalize(Email);
 
-            var emailNormalized = Email.Trim().ToUpperInvariant();
-
-            // Ensure alias trimmed
-            var alias = (Alias ?? string.Empty).Trim();
-
-            // If duplicate (GameId, Email) exists, update their details and resend verification if needed.
-            var player = await _db.Players
-                .FirstOrDefaultAsync(p => p.GameId == GameId.Value && p.EmailNormalized == emailNormalized);
+            // Upsert player — UNVERIFIED and INACTIVE until they click the link
+            var player = await _db.Players.SingleOrDefaultAsync(
+                p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
 
             if (player == null)
             {
                 player = new Player
                 {
-                    GameId = GameId.Value,
+                    GameId = GameId,
                     Email = Email.Trim(),
-                    EmailNormalized = emailNormalized,
-                    DisplayName = alias,     // keep DisplayName aligned with Alias initially
+                    EmailNormalized = emailNorm,
+                    DisplayName = DisplayName.Trim(),
+                    Alias = Alias.Trim(),
                     RealName = RealName.Trim(),
-                    Alias = alias,
-                    IsActive = false,        // locked until verified
-                    Points = 0,
+                    HairColor = HairColor?.Trim(),
+                    EyeColor = EyeColor?.Trim(),
+                    VisibleMarkings = VisibleMarkings?.Trim(),
                     ApproximateAge = ApproximateAge,
-                    EyeColor = EyeColor,
-                    HairColor = HairColor,
-                    Specialty = Specialty,
-                    VisibleMarkings = VisibleMarkings,
-                    IsEmailVerified = false
+                    Specialty = Specialty?.Trim(),
+                    IsActive = false,
+                    IsEmailVerified = false,
+                    Points = 0
                 };
-
-                // Minimal passcode fields (required by schema)
-                if (player.PasscodeHash == null || player.PasscodeHash.Length == 0)
-                    player.PasscodeHash = Array.Empty<byte>();
-                if (player.PasscodeSalt == null || player.PasscodeSalt.Length == 0)
-                    player.PasscodeSalt = Array.Empty<byte>();
-                if (string.IsNullOrWhiteSpace(player.PasscodeAlgo))
-                    player.PasscodeAlgo = "argon2id";
-                if (player.PasscodeCost <= 0)
-                    player.PasscodeCost = 3;
-
                 _db.Players.Add(player);
             }
             else
             {
-                // Update editable fields on re-signup
+                player.DisplayName = DisplayName.Trim();
+                player.Alias = Alias.Trim();
                 player.RealName = RealName.Trim();
-                player.Alias = alias;
-                player.DisplayName = alias;
+                player.HairColor = HairColor?.Trim();
+                player.EyeColor = EyeColor?.Trim();
+                player.VisibleMarkings = VisibleMarkings?.Trim();
                 player.ApproximateAge = ApproximateAge;
-                player.EyeColor = EyeColor;
-                player.HairColor = HairColor;
-                player.Specialty = Specialty;
-                player.VisibleMarkings = VisibleMarkings;
-                // keep IsActive gated until verified
+                player.Specialty = Specialty?.Trim();
+
+                // Ensure they remain hidden until verifying
+                player.IsEmailVerified = false;
+                player.IsActive = false;
             }
 
-            // Optional: handle Photo upload via your FileStorageService elsewhere.
+            // Save REQUIRED photo
+            var (url, contentType, sha256) =
+                await _files.SavePlayerPhotoAsync(GameId, emailNorm, uploaded!, ct);
 
-            // Create a cryptographically strong token
-            var tokenBytes = RandomNumberGenerator.GetBytes(32);
-            var token = Convert.ToBase64String(tokenBytes)
-                .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            player.PhotoUrl = url;
+            player.PhotoContentType = contentType;
+            player.PhotoBytesSha256 = sha256;
 
-            player.VerificationToken = token;
+            // Issue fresh verification token
+            player.VerificationToken = Guid.NewGuid().ToString("N");
             player.VerificationSentAt = DateTimeOffset.UtcNow;
             player.IsEmailVerified = false;
             player.IsActive = false;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
 
-            // Build absolute verification URL
+            // Build absolute verification URL and send email
             var verifyUrl = _linkGenerator.GetUriByPage(
-                HttpContext,
+                httpContext: HttpContext,
                 page: "/Signup/Verify",
                 values: new { gameId = player.GameId, email = player.Email, token = player.VerificationToken });
 
@@ -191,10 +193,10 @@ namespace AssassinsProject.Pages.Signup
                 .AppendLine("If you didn’t request this, you can ignore this email.")
                 .ToString();
 
-            await _emailSender.SendAsync(player.Email, subject, body);
+            await _email.SendAsync(player.Email, subject, body);
 
-            TempData["SignupMessage"] = "Check your email for a verification link.";
-            return RedirectToPage("/Signup/Verify", new { gameId = player.GameId, email = player.Email });
+
+            return RedirectToPage("/Signup/Sent", new { gameId = GameId, email = player.Email });
         }
     }
 }

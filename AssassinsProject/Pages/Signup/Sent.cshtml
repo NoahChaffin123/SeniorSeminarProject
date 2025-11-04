@@ -1,0 +1,16 @@
+@page
+@model AssassinsProject.Pages.Signup.SentModel
+@{
+    ViewData["Title"] = "Verify your email";
+}
+
+<h2 class="mb-3">You have been sent a verification link</h2>
+
+<div class="alert alert-info">
+    We sent a verification link to <strong>@Model.Email</strong>. 
+    Please check your inbox (and spam folder). After you click the link, you’ll appear in the game.
+</div>
+
+<p>
+    <a class="btn btn-secondary" asp-page="/Signup/Index" asp-route-gameId="@Model.GameId">Back to signup</a>
+</p>
