@@ -47,7 +47,6 @@ namespace AssassinsProject.Pages.Signup
         [BindProperty, Required, StringLength(100)]
         public string Alias { get; set; } = string.Empty;
 
-        // This may fail to bind depending on the input name in the view
         [BindProperty] public IFormFile? Photo { get; set; }
 
         [BindProperty, Required, StringLength(100)] public string RealName { get; set; } = string.Empty;
@@ -77,11 +76,19 @@ namespace AssassinsProject.Pages.Signup
                 ModelState.AddModelError(string.Empty, "Signups are closed.");
             }
 
+            // --- Domain restriction: require @hendrix.edu ---
+            var emailTrimmed = (Email ?? string.Empty).Trim();
+
+            //THIS ENFORCES EMAILS TO BE HENDRIX EMAILS
+            // if (!emailTrimmed.EndsWith("@hendrix.edu", StringComparison.OrdinalIgnoreCase))
+            // {
+            //     ModelState.AddModelError(nameof(Email), "Use your @hendrix.edu email address.");
+            // }
+
             // --- Robustly capture the uploaded file (required) ---
             IFormFile? uploaded = Photo;
             if (uploaded is null || uploaded.Length == 0)
             {
-                // Try to find by name (handles nested names) or fallback to first file
                 uploaded = Request.Form.Files.FirstOrDefault(f =>
                     f.Name.EndsWith(".Photo", StringComparison.OrdinalIgnoreCase) ||
                     f.Name.Equals("Photo", StringComparison.OrdinalIgnoreCase))
@@ -98,12 +105,11 @@ namespace AssassinsProject.Pages.Signup
                     ? RealName.Trim()
                     : (Alias ?? string.Empty).Trim();
 
-                // Remove any “DisplayName required” error that the model binder added
                 ModelState.Remove(nameof(DisplayName));
             }
+
             if (!ModelState.IsValid)
             {
-                // Helpful server log of why ModelState failed
                 foreach (var kv in ModelState)
                 {
                     foreach (var err in kv.Value.Errors)
@@ -114,7 +120,7 @@ namespace AssassinsProject.Pages.Signup
             }
 
             // Normalize email consistently
-            var emailNorm = EmailNormalizer.Normalize(Email);
+            var emailNorm = EmailNormalizer.Normalize(emailTrimmed);
 
             // Upsert player
             var player = await _db.Players.SingleOrDefaultAsync(
@@ -125,7 +131,7 @@ namespace AssassinsProject.Pages.Signup
                 player = new Player
                 {
                     GameId = GameId,
-                    Email = Email.Trim(),
+                    Email = emailTrimmed,
                     EmailNormalized = emailNorm,
                     DisplayName = DisplayName.Trim(),
                     Alias = Alias.Trim(),
@@ -138,8 +144,6 @@ namespace AssassinsProject.Pages.Signup
                     IsActive = false,           // locked until verified
                     IsEmailVerified = false,
                     Points = 0,
-
-                    // minimal passcode fields to satisfy schema if needed
                     PasscodeAlgo = "argon2id",
                     PasscodeCost = 3,
                     PasscodeHash = Array.Empty<byte>(),
@@ -158,8 +162,6 @@ namespace AssassinsProject.Pages.Signup
                 player.VisibleMarkings = VisibleMarkings?.Trim();
                 player.ApproximateAge = ApproximateAge;
                 player.Specialty = Specialty?.Trim();
-
-                // keep locked until they verify (re-signups)
                 player.IsActive = false;
                 player.IsEmailVerified = false;
             }
@@ -190,7 +192,7 @@ namespace AssassinsProject.Pages.Signup
             // Subject includes the game name
             var subject = $"{game.Name} Verification Email";
 
-            // Body: includes a clickable hyperlink (HTML) + the raw URL line for clients that render plain text
+            // HTML body with clickable link + plain text fallback
             var body =
 $@"<p>Thanks for signing up for <strong>{game.Name}</strong>!</p>
 <p>Please verify your email to join the game:</p>
