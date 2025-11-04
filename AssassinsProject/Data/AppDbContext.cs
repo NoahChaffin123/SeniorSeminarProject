@@ -1,63 +1,104 @@
-using AssassinsProject.Models;
 using Microsoft.EntityFrameworkCore;
+using AssassinsProject.Models;
 
-namespace AssassinsProject.Data;
-
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+namespace AssassinsProject.Data
 {
-    public DbSet<Game> Games => Set<Game>();
-    public DbSet<Player> Players => Set<Player>();
-    public DbSet<Elimination> Eliminations => Set<Elimination>();
-
-    protected override void OnModelCreating(ModelBuilder b)
+    public class AppDbContext : DbContext
     {
-        // Player PK
-        b.Entity<Player>().HasKey(p => new { p.GameId, p.Email });
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-        // Player columns
-        b.Entity<Player>().Property(p => p.Email).HasMaxLength(256);
-        b.Entity<Player>().Property(p => p.EmailNormalized).HasMaxLength(256).IsRequired();
-        b.Entity<Player>().Property(p => p.DisplayName).HasMaxLength(100).IsRequired();
+        public DbSet<Game> Games => Set<Game>();
+        public DbSet<Player> Players => Set<Player>();
+        public DbSet<Elimination> Eliminations => Set<Elimination>();
 
-        b.Entity<Player>().Property(p => p.RealName).HasMaxLength(100).IsRequired();
-        b.Entity<Player>().Property(p => p.Alias).HasMaxLength(100).IsRequired();
-        b.Entity<Player>().Property(p => p.HairColor).HasMaxLength(50);
-        b.Entity<Player>().Property(p => p.EyeColor).HasMaxLength(50);
-        b.Entity<Player>().Property(p => p.VisibleMarkings).HasMaxLength(500);
-        b.Entity<Player>().Property(p => p.Specialty).HasMaxLength(100);
-        b.Entity<Player>().Property(p => p.PasscodePlaintext).HasMaxLength(64);
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
 
-        // Unique Alias per game
-        b.Entity<Player>()
-            .HasIndex(p => new { p.GameId, p.Alias })
-            .IsUnique();
+            // ---------- GAME ----------
+            modelBuilder.Entity<Game>(e =>
+            {
+                e.HasKey(g => g.Id);
+                e.Property(g => g.Name).HasMaxLength(128).IsRequired();
 
-        // Target relation (ring)
-        b.Entity<Player>()
-            .HasOne(p => p.Target)
-            .WithMany(p => p.Hunters)
-            .HasForeignKey(p => new { p.GameId, p.TargetEmail })
-            .HasPrincipalKey(p => new { p.GameId, p.Email })
-            .OnDelete(DeleteBehavior.NoAction);
+                e.HasMany(g => g.Players)
+                 .WithOne(p => p.Game)
+                 .HasForeignKey(p => p.GameId)
+                 .OnDelete(DeleteBehavior.Cascade);
 
-        // One hunter per active target
-        b.Entity<Player>()
-            .HasIndex(p => new { p.GameId, p.TargetEmail })
-            .HasFilter("[IsActive] = 1 AND [TargetEmail] IS NOT NULL")
-            .IsUnique();
+                // Link Eliminations to GameId WITHOUT requiring an Elimination.Game nav
+                e.HasMany(g => g.Eliminations)
+                 .WithOne() // <-- no navigation on Elimination
+                 .HasForeignKey(el => el.GameId)
+                 .OnDelete(DeleteBehavior.Cascade);
+            });
 
-        // Fast lookup by normalized email
-        b.Entity<Player>()
-            .HasIndex(p => new { p.GameId, p.EmailNormalized });
+            // ---------- PLAYER ----------
+            modelBuilder.Entity<Player>(e =>
+            {
+                // Composite PK (GameId, Email)
+                e.HasKey(p => new { p.GameId, p.Email });
 
-        // Game config
-        b.Entity<Game>().Property(g => g.Name).HasMaxLength(128).IsRequired();
-        b.Entity<Game>().Property(g => g.IsSignupOpen).HasDefaultValue(true);
+                e.Property(p => p.Email).HasMaxLength(256).IsRequired();
+                e.Property(p => p.EmailNormalized).HasMaxLength(256).IsRequired();
+                e.Property(p => p.DisplayName).HasMaxLength(100).IsRequired();
+                e.Property(p => p.RealName).HasMaxLength(100).IsRequired();
+                e.Property(p => p.Alias).HasMaxLength(100).IsRequired();
+                e.Property(p => p.TargetEmail).HasMaxLength(256);
 
-        // Eliminations FK
-        b.Entity<Elimination>()
-            .HasOne(e => e.Game)
-            .WithMany(g => g.Eliminations)
-            .HasForeignKey(e => e.GameId);
+                // Helpful indexes
+                e.HasIndex(p => new { p.GameId, p.Email });
+                e.HasIndex(p => new { p.GameId, p.Alias });
+                e.HasIndex(p => new { p.GameId, p.EmailNormalized });
+                e.HasIndex(p => new { p.GameId, p.TargetEmail });
+
+                // Explicit FK to Game prevents EF from inventing a shadow GameId1
+                e.HasOne(p => p.Game)
+                 .WithMany(g => g.Players)
+                 .HasForeignKey(p => p.GameId)
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                // Optional: self-ref target link; use NON-GENERIC HasPrincipalKey overload
+                e.HasOne(p => p.Target)
+                 .WithMany()
+                 .HasForeignKey(p => new { p.GameId, p.TargetEmail })
+                 .HasPrincipalKey(nameof(Player.GameId), nameof(Player.Email))
+                 .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // ---------- ELIMINATION ----------
+            modelBuilder.Entity<Elimination>(e =>
+            {
+                e.HasKey(x => x.Id);
+
+                e.Property(x => x.EliminatorEmail).HasMaxLength(256).IsRequired();
+                e.Property(x => x.VictimEmail).HasMaxLength(256).IsRequired();
+                e.Property(x => x.Notes).HasMaxLength(1000);
+
+                // FK to Game via GameId; no nav on Elimination
+                e.HasOne<Game>()
+                 .WithMany(g => g.Eliminations)
+                 .HasForeignKey(x => x.GameId)
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                // Eliminator -> Player (composite FK to Players(GameId, Email))
+                e.HasOne(x => x.Eliminator)
+                 .WithMany()
+                 .HasForeignKey(x => new { x.EliminatorGameId, x.EliminatorEmail })
+                 .HasPrincipalKey(nameof(Player.GameId), nameof(Player.Email))
+                 .OnDelete(DeleteBehavior.NoAction);
+
+                // Victim -> Player (composite FK to Players(GameId, Email))
+                e.HasOne(x => x.Victim)
+                 .WithMany()
+                 .HasForeignKey(x => new { x.VictimGameId, x.VictimEmail })
+                 .HasPrincipalKey(nameof(Player.GameId), nameof(Player.Email))
+                 .OnDelete(DeleteBehavior.NoAction);
+
+                // Composite indexes for lookups
+                e.HasIndex(x => new { x.EliminatorGameId, x.EliminatorEmail });
+                e.HasIndex(x => new { x.VictimGameId, x.VictimEmail });
+            });
+        }
     }
 }

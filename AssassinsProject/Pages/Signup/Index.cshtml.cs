@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
-using System.Text.Encodings.Web;
+using System.Text;
+using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Services.Email;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -15,181 +15,186 @@ namespace AssassinsProject.Pages.Signup
     {
         private readonly AppDbContext _db;
         private readonly IEmailSender _emailSender;
-        private readonly IConfiguration _config;
-        private readonly HtmlEncoder _html;
+        private readonly LinkGenerator _linkGenerator;
+        private readonly ILogger<IndexModel> _logger;
 
-        public IndexModel(AppDbContext db, IEmailSender emailSender, IConfiguration config, HtmlEncoder html)
+        public IndexModel(
+            AppDbContext db,
+            IEmailSender emailSender,
+            LinkGenerator linkGenerator,
+            ILogger<IndexModel> logger)
         {
             _db = db;
             _emailSender = emailSender;
-            _config = config;
-            _html = html;
+            _linkGenerator = linkGenerator;
+            _logger = logger;
         }
 
-        // The page/markup expects this as ?gameId=#
+        // You can set this from the querystring or UI; default to the first game if present.
         [BindProperty(SupportsGet = true)]
-        public int GameId { get; set; }
+        public int? GameId { get; set; }
 
-        // Used by the Razor page to enable/disable the form
+        // Form fields (kept in sync with your .cshtml)
+        [BindProperty, Required, EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [BindProperty, Required, StringLength(100)]
+        public string RealName { get; set; } = string.Empty;
+
+        [BindProperty, Required, StringLength(100)]
+        public string Alias { get; set; } = string.Empty;
+
+        [BindProperty]
+        public int? ApproximateAge { get; set; }
+
+        [BindProperty]
+        public string? EyeColor { get; set; }
+
+        [BindProperty]
+        public string? HairColor { get; set; }
+
+        [BindProperty]
+        public string? VisibleMarkings { get; set; }
+
+        [BindProperty]
+        public string? Specialty { get; set; }
+
+        [BindProperty]
+        public IFormFile? Photo { get; set; }
+
         public bool IsSignupOpen { get; private set; } = true;
 
-        // These properties match asp-for fields in Index.cshtml
-        [BindProperty, Required, EmailAddress] public string Email { get; set; } = string.Empty;
-        [BindProperty, Required] public string RealName { get; set; } = string.Empty;
-        [BindProperty, Required] public string Alias { get; set; } = string.Empty;
-
-        [BindProperty] public string? HairColor { get; set; }
-        [BindProperty] public string? EyeColor { get; set; }
-        [BindProperty] public string? VisibleMarkings { get; set; }
-        [BindProperty] public int?    ApproximateAge { get; set; }
-        [BindProperty] public string? Specialty { get; set; }
-
-        [BindProperty] public IFormFile? Photo { get; set; } // if your page has this field
-
-        public string? SuccessMessage { get; private set; }
-        public string? ErrorMessage { get; private set; }
-        public Game? Game { get; private set; }
-
-        public async Task<IActionResult> OnGetAsync()
+        public async Task OnGetAsync()
         {
-            if (GameId <= 0)
+            if (!GameId.HasValue)
             {
-                ErrorMessage = "Missing game id.";
-                return Page();
+                var firstGame = await _db.Games.OrderBy(g => g.Id).FirstOrDefaultAsync();
+                GameId = firstGame?.Id;
             }
 
-            Game = await _db.Games.FirstOrDefaultAsync(g => g.Id == GameId);
-            if (Game is null)
+            // Optional: reflect roster lock/open status if your Game has that flag
+            if (GameId.HasValue)
             {
-                ErrorMessage = "Game not found.";
-                return Page();
+                var game = await _db.Games.FindAsync(GameId.Value);
+                if (game != null)
+                {
+                    // If you track IsSignupOpen, use it; otherwise leave true.
+                    var prop = game.GetType().GetProperty("IsSignupOpen");
+                    if (prop != null && prop.PropertyType == typeof(bool))
+                    {
+                        IsSignupOpen = (bool)(prop.GetValue(game) ?? false);
+                    }
+                }
             }
-
-            IsSignupOpen = Game.IsSignupOpen;
-            if (!IsSignupOpen)
-            {
-                ErrorMessage = "Signups are currently closed for this game.";
-            }
-
-            return Page();
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
-            // Basic model validation
             if (!ModelState.IsValid)
+                return Page();
+
+            if (!GameId.HasValue)
             {
-                await LoadGameAsync();
+                ModelState.AddModelError(string.Empty, "No game selected.");
                 return Page();
             }
 
-            await LoadGameAsync();
-            if (Game is null)
+            var game = await _db.Games.FindAsync(GameId.Value);
+            if (game == null)
             {
                 ModelState.AddModelError(string.Empty, "Game not found.");
                 return Page();
             }
 
-            IsSignupOpen = Game.IsSignupOpen;
-            if (!IsSignupOpen)
-            {
-                ModelState.AddModelError(string.Empty, "Signups are currently closed for this game.");
-                return Page();
-            }
+            var emailNormalized = Email.Trim().ToUpperInvariant();
 
-            var email = Email.Trim();
-            var emailNorm = email.ToLowerInvariant();
-            var alias = Alias.Trim();
+            // Ensure alias trimmed
+            var alias = (Alias ?? string.Empty).Trim();
 
-            // App-level alias uniqueness (DB has a unique index too)
-            var aliasInUse = await _db.Players.AnyAsync(p =>
-                p.GameId == GameId &&
-                p.Alias.ToLower() == alias.ToLower());
+            // If duplicate (GameId, Email) exists, update their details and resend verification if needed.
+            var player = await _db.Players
+                .FirstOrDefaultAsync(p => p.GameId == GameId.Value && p.EmailNormalized == emailNormalized);
 
-            if (aliasInUse)
-            {
-                ModelState.AddModelError(nameof(Alias), "That alias is already taken in this game.");
-                return Page();
-            }
-
-            // Upsert a pending player
-            var player = await _db.Players.FirstOrDefaultAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm);
-            if (player is null)
+            if (player == null)
             {
                 player = new Player
                 {
-                    GameId = GameId,
-                    Email = email,
-                    EmailNormalized = emailNorm,
-                    DisplayName = alias,    // or a separate DisplayName field if your view uses one
+                    GameId = GameId.Value,
+                    Email = Email.Trim(),
+                    EmailNormalized = emailNormalized,
+                    DisplayName = alias,     // keep DisplayName aligned with Alias initially
                     RealName = RealName.Trim(),
                     Alias = alias,
-                    HairColor = HairColor,
-                    EyeColor = EyeColor,
-                    VisibleMarkings = VisibleMarkings,
+                    IsActive = false,        // locked until verified
+                    Points = 0,
                     ApproximateAge = ApproximateAge,
+                    EyeColor = EyeColor,
+                    HairColor = HairColor,
                     Specialty = Specialty,
-                    IsActive = false,
-                    PasscodeAlgo = "PBKDF2-SHA256",
-                    PasscodeCost = 100_000,
-                    PasscodeSetAt = DateTimeOffset.UtcNow
+                    VisibleMarkings = VisibleMarkings,
+                    IsEmailVerified = false
                 };
+
+                // Minimal passcode fields (required by schema)
+                if (player.PasscodeHash == null || player.PasscodeHash.Length == 0)
+                    player.PasscodeHash = Array.Empty<byte>();
+                if (player.PasscodeSalt == null || player.PasscodeSalt.Length == 0)
+                    player.PasscodeSalt = Array.Empty<byte>();
+                if (string.IsNullOrWhiteSpace(player.PasscodeAlgo))
+                    player.PasscodeAlgo = "argon2id";
+                if (player.PasscodeCost <= 0)
+                    player.PasscodeCost = 3;
+
                 _db.Players.Add(player);
             }
             else
             {
+                // Update editable fields on re-signup
                 player.RealName = RealName.Trim();
                 player.Alias = alias;
-                player.HairColor = HairColor;
-                player.EyeColor = EyeColor;
-                player.VisibleMarkings = VisibleMarkings;
+                player.DisplayName = alias;
                 player.ApproximateAge = ApproximateAge;
+                player.EyeColor = EyeColor;
+                player.HairColor = HairColor;
                 player.Specialty = Specialty;
-                player.IsActive = false; // still pending until email verification
+                player.VisibleMarkings = VisibleMarkings;
+                // keep IsActive gated until verified
             }
 
-            // Generate/assign verification token
-            player.EmailVerifyToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            player.EmailVerifyTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
-            player.EmailVerifiedAt = null;
+            // Optional: handle Photo upload via your FileStorageService elsewhere.
+
+            // Create a cryptographically strong token
+            var tokenBytes = RandomNumberGenerator.GetBytes(32);
+            var token = Convert.ToBase64String(tokenBytes)
+                .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
+            player.VerificationToken = token;
+            player.VerificationSentAt = DateTimeOffset.UtcNow;
+            player.IsEmailVerified = false;
+            player.IsActive = false;
 
             await _db.SaveChangesAsync();
 
             // Build absolute verification URL
-            var baseUrl = _config["App:PublicBaseUrl"];
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            {
-                baseUrl = $"{Request.Scheme}://{Request.Host}";
-            }
+            var verifyUrl = _linkGenerator.GetUriByPage(
+                HttpContext,
+                page: "/Signup/Verify",
+                values: new { gameId = player.GameId, email = player.Email, token = player.VerificationToken });
 
-            var verifyUrl =
-                $"{baseUrl}/Signup/Verify?gameId={GameId}" +
-                $"&email={Uri.EscapeDataString(email)}" +
-                $"&token={Uri.EscapeDataString(player.EmailVerifyToken)}";
+            var subject = "Verify your email for Assassins";
+            var body = new StringBuilder()
+                .AppendLine("Thanks for signing up for Assassins!")
+                .AppendLine()
+                .AppendLine("Please verify your email to join the game:")
+                .AppendLine(verifyUrl)
+                .AppendLine()
+                .AppendLine("If you didn’t request this, you can ignore this email.")
+                .ToString();
 
-            var subject = $"Verify your email for {Game.Name}";
-            var body = $@"
-<p>Hi {_html.Encode(RealName)},</p>
-<p>Please verify your email to join <strong>{_html.Encode(Game.Name)}</strong>.</p>
-<p><a href=""{verifyUrl}"">Click here to verify your email</a></p>
-<p>This link expires at {player.EmailVerifyTokenExpiresAt:u}.</p>";
+            await _emailSender.SendAsync(player.Email, subject, body);
 
-            await _emailSender.SendAsync(email, subject, body);
-
-            SuccessMessage = "Thanks! We sent a verification link to your email. Click it within 24 hours to be admitted into the game.";
-            ModelState.Clear();
-
-            // Keep Game data for the page after POST
-            await LoadGameAsync();
-            return Page();
-        }
-
-        private async Task LoadGameAsync()
-        {
-            if (Game is null && GameId > 0)
-            {
-                Game = await _db.Games.FirstOrDefaultAsync(g => g.Id == GameId);
-            }
+            TempData["SignupMessage"] = "Check your email for a verification link.";
+            return RedirectToPage("/Signup/Verify", new { gameId = player.GameId, email = player.Email });
         }
     }
 }

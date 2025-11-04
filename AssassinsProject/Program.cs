@@ -40,4 +40,17 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 
+
+//This was a test
+// using (var scope = app.Services.CreateScope())
+// {
+//     var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+//     await emailSender.SendAsync(
+//         "chaffinnc@hendrix.edu",
+//         "This is a test from Noah's Assassins website",
+//         "Testing Testerson"
+//     );
+// }
+
+
 app.Run();

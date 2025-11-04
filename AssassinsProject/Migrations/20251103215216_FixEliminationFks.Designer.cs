@@ -4,6 +4,7 @@ using AssassinsProject.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AssassinsProject.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251103215216_FixEliminationFks")]
+    partial class FixEliminationFks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,9 +47,11 @@ namespace AssassinsProject.Migrations
                     b.Property<int>("GameId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("GameId1")
+                        .HasColumnType("int");
+
                     b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset");
@@ -70,9 +75,13 @@ namespace AssassinsProject.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GameId");
+                    b.HasIndex("GameId1");
 
                     b.HasIndex("EliminatorGameId", "EliminatorEmail");
+
+                    b.HasIndex("GameId", "EliminatorEmail");
+
+                    b.HasIndex("GameId", "VictimEmail");
 
                     b.HasIndex("VictimGameId", "VictimEmail");
 
@@ -115,11 +124,13 @@ namespace AssassinsProject.Migrations
             modelBuilder.Entity("AssassinsProject.Models.Player", b =>
                 {
                     b.Property<int>("GameId")
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasColumnOrder(0);
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnOrder(1);
 
                     b.Property<string>("Alias")
                         .IsRequired()
@@ -140,16 +151,23 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("EyeColor")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("GameId1")
+                        .HasColumnType("int");
 
                     b.Property<string>("HairColor")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsEmailVerified")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("PasscodeAlgo")
                         .IsRequired()
@@ -190,7 +208,8 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Specialty")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("TargetEmail")
                         .HasMaxLength(256)
@@ -200,20 +219,25 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("VerificationToken")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("VisibleMarkings")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.HasKey("GameId", "Email");
 
-                    b.HasIndex("GameId", "Alias");
+                    b.HasIndex("GameId1");
 
-                    b.HasIndex("GameId", "Email");
+                    b.HasIndex("GameId", "Alias")
+                        .IsUnique();
 
                     b.HasIndex("GameId", "EmailNormalized");
 
-                    b.HasIndex("GameId", "TargetEmail");
+                    b.HasIndex("GameId", "TargetEmail")
+                        .IsUnique()
+                        .HasFilter("[IsActive] = 1 AND [TargetEmail] IS NOT NULL");
 
                     b.ToTable("Players");
                 });
@@ -221,10 +245,14 @@ namespace AssassinsProject.Migrations
             modelBuilder.Entity("AssassinsProject.Models.Elimination", b =>
                 {
                     b.HasOne("AssassinsProject.Models.Game", null)
-                        .WithMany("Eliminations")
+                        .WithMany()
                         .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany("Eliminations")
+                        .HasForeignKey("GameId1");
 
                     b.HasOne("AssassinsProject.Models.Player", "Eliminator")
                         .WithMany()
@@ -245,18 +273,20 @@ namespace AssassinsProject.Migrations
 
             modelBuilder.Entity("AssassinsProject.Models.Player", b =>
                 {
-                    b.HasOne("AssassinsProject.Models.Game", "Game")
-                        .WithMany("Players")
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany()
                         .HasForeignKey("GameId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("AssassinsProject.Models.Player", "Target")
-                        .WithMany()
-                        .HasForeignKey("GameId", "TargetEmail")
-                        .OnDelete(DeleteBehavior.SetNull);
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany("Players")
+                        .HasForeignKey("GameId1");
 
-                    b.Navigation("Game");
+                    b.HasOne("AssassinsProject.Models.Player", "Target")
+                        .WithMany("Hunters")
+                        .HasForeignKey("GameId", "TargetEmail")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Target");
                 });
@@ -266,6 +296,11 @@ namespace AssassinsProject.Migrations
                     b.Navigation("Eliminations");
 
                     b.Navigation("Players");
+                });
+
+            modelBuilder.Entity("AssassinsProject.Models.Player", b =>
+                {
+                    b.Navigation("Hunters");
                 });
 #pragma warning restore 612, 618
         }

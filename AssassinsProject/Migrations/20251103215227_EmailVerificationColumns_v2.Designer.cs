@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AssassinsProject.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251103032837_EmailVerification")]
-    partial class EmailVerification
+    [Migration("20251103215227_EmailVerificationColumns_v2")]
+    partial class EmailVerificationColumns_v2
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -35,10 +35,23 @@ namespace AssassinsProject.Migrations
 
                     b.Property<string>("EliminatorEmail")
                         .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("EliminatorGameId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EvidenceUrl")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("GameId")
                         .HasColumnType("int");
+
+                    b.Property<int?>("GameId1")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset");
@@ -54,11 +67,23 @@ namespace AssassinsProject.Migrations
 
                     b.Property<string>("VictimEmail")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("VictimGameId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GameId");
+                    b.HasIndex("GameId1");
+
+                    b.HasIndex("EliminatorGameId", "EliminatorEmail");
+
+                    b.HasIndex("GameId", "EliminatorEmail");
+
+                    b.HasIndex("GameId", "VictimEmail");
+
+                    b.HasIndex("VictimGameId", "VictimEmail");
 
                     b.ToTable("Eliminations");
                 });
@@ -78,9 +103,7 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsSignupOpen")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -101,11 +124,13 @@ namespace AssassinsProject.Migrations
             modelBuilder.Entity("AssassinsProject.Models.Player", b =>
                 {
                     b.Property<int>("GameId")
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasColumnOrder(0);
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnOrder(1);
 
                     b.Property<string>("Alias")
                         .IsRequired()
@@ -125,18 +150,12 @@ namespace AssassinsProject.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<DateTimeOffset?>("EmailVerifiedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("EmailVerifyToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTimeOffset?>("EmailVerifyTokenExpiresAt")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<string>("EyeColor")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("GameId1")
+                        .HasColumnType("int");
 
                     b.Property<string>("HairColor")
                         .HasMaxLength(50)
@@ -144,6 +163,11 @@ namespace AssassinsProject.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("IsEmailVerified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("PasscodeAlgo")
                         .IsRequired()
@@ -157,8 +181,7 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("varbinary(max)");
 
                     b.Property<string>("PasscodePlaintext")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<byte[]>("PasscodeSalt")
                         .IsRequired()
@@ -189,13 +212,23 @@ namespace AssassinsProject.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("TargetEmail")
+                        .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset?>("VerificationSentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("VerificationToken")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("VisibleMarkings")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
                     b.HasKey("GameId", "Email");
+
+                    b.HasIndex("GameId1");
 
                     b.HasIndex("GameId", "Alias")
                         .IsUnique();
@@ -211,29 +244,49 @@ namespace AssassinsProject.Migrations
 
             modelBuilder.Entity("AssassinsProject.Models.Elimination", b =>
                 {
-                    b.HasOne("AssassinsProject.Models.Game", "Game")
-                        .WithMany("Eliminations")
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany()
                         .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("Game");
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany("Eliminations")
+                        .HasForeignKey("GameId1");
+
+                    b.HasOne("AssassinsProject.Models.Player", "Eliminator")
+                        .WithMany()
+                        .HasForeignKey("EliminatorGameId", "EliminatorEmail")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("AssassinsProject.Models.Player", "Victim")
+                        .WithMany()
+                        .HasForeignKey("VictimGameId", "VictimEmail")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Eliminator");
+
+                    b.Navigation("Victim");
                 });
 
             modelBuilder.Entity("AssassinsProject.Models.Player", b =>
                 {
-                    b.HasOne("AssassinsProject.Models.Game", "Game")
-                        .WithMany("Players")
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany()
                         .HasForeignKey("GameId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("AssassinsProject.Models.Game", null)
+                        .WithMany("Players")
+                        .HasForeignKey("GameId1");
 
                     b.HasOne("AssassinsProject.Models.Player", "Target")
                         .WithMany("Hunters")
                         .HasForeignKey("GameId", "TargetEmail")
                         .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Game");
 
                     b.Navigation("Target");
                 });
