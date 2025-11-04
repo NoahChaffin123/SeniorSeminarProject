@@ -1,13 +1,14 @@
 @page
 @model AssassinsProject.Pages.Signup.SentModel
 @{
+    Layout = "_Layout.Player";
     ViewData["Title"] = "Verify your email";
 }
 
 <h2 class="mb-3">You have been sent a verification link</h2>
 
 <div class="alert alert-info">
-    We sent a verification link to <strong>@Model.Email</strong>. 
+    We sent a verification link to <strong>@Model.Email</strong>.
     Please check your inbox (and spam folder). After you click the link, you’ll appear in the game.
 </div>
 

@@ -104,7 +104,7 @@ namespace AssassinsProject.Pages.Signup
                 DisplayName = !string.IsNullOrWhiteSpace(RealName)
                     ? RealName.Trim()
                     : (Alias ?? string.Empty).Trim();
-                ModelState.Remove(nameof(DisplayName)); // clear binder’s “required” error (if any)
+                ModelState.Remove(nameof(DisplayName)); // clear binder error if any
             }
 
             if (!ModelState.IsValid)
@@ -120,7 +120,7 @@ namespace AssassinsProject.Pages.Signup
             // Normalize email
             var emailNorm = EmailNormalizer.Normalize(Email);
 
-            // Upsert player — UNVERIFIED and INACTIVE until they click the link
+            // Upsert player — keep hidden until verified
             var player = await _db.Players.SingleOrDefaultAsync(
                 p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
 
@@ -156,7 +156,7 @@ namespace AssassinsProject.Pages.Signup
                 player.ApproximateAge = ApproximateAge;
                 player.Specialty = Specialty?.Trim();
 
-                // Ensure they remain hidden until verifying
+                // ensure hidden until they verify
                 player.IsEmailVerified = false;
                 player.IsActive = false;
             }
@@ -195,7 +195,7 @@ namespace AssassinsProject.Pages.Signup
 
             await _email.SendAsync(player.Email, subject, body);
 
-
+            // Redirect to confirmation page (NOT the game hub)
             return RedirectToPage("/Signup/Sent", new { gameId = GameId, email = player.Email });
         }
     }

@@ -56,12 +56,10 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Mark verified and allow the player to appear in the game.
+
             player.IsEmailVerified = true;
 
-            // If you want them to immediately count as “active” in the roster,
-            // set IsActive=true here. If you prefer admins to activate later,
-            // comment the next line out. Requirement says appear only after verify:
+         
             player.IsActive = true;
 
             // Invalidate token so the link can’t be reused

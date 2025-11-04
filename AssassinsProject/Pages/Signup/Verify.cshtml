@@ -1,23 +1,17 @@
 @page
 @model AssassinsProject.Pages.Signup.VerifyModel
 @{
-    ViewData["Title"] = "Verify Email";
+    Layout = "_Layout.Player";
+    ViewData["Title"] = "Email verification";
 }
 
-<h1>Verify Email</h1>
+<h2 class="mb-3">Verify Email</h2>
 
 @if (Model.Verified)
 {
-    <div class="alert alert-success">
-        @Model.Message
-    </div>
-    <p>
-        <a class="btn btn-primary" asp-page="/Games/Index">Go to Games</a>
-    </p>
+    <div class="alert alert-success">@Model.Message</div>
 }
 else
 {
-    <div class="alert alert-info">
-        @Model.Message
-    </div>
+    <div class="alert alert-danger">@Model.Message</div>
 }
