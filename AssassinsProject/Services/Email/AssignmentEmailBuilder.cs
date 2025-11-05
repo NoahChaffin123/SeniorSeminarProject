@@ -9,7 +9,7 @@ namespace AssassinsProject.Services.Email
 
         public static Result Build(Game game, Player recipient, Player? target, string? baseUrl = null)
         {
-            var subject = $"Your assignment for \"{game.Name}\"";
+            var subject = $"{game.Name} Target and Password";
 
             // Build the plain-text body
             var txt = new StringBuilder();

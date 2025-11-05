@@ -1,17 +1,9 @@
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Services;
-using AssassinsProject.Services.Email;
-using AssassinsProject.Utilities; // <-- for Passcode.Generate()
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AssassinsProject.Pages.Games;
 
@@ -19,15 +11,11 @@ public class DetailsModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly GameService _svc;
-    private readonly IEmailSender _email;
-    private readonly ILogger<DetailsModel> _log;
 
-    public DetailsModel(AppDbContext db, GameService svc, IEmailSender email, ILogger<DetailsModel> log)
+    public DetailsModel(AppDbContext db, GameService svc)
     {
         _db = db;
         _svc = svc;
-        _email = email;
-        _log = log;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -100,64 +88,12 @@ public class DetailsModel : PageModel
         return Page();
     }
 
-    // Start game
+    // Start game — GameService handles assignments + sending the one email.
     public async Task<IActionResult> OnPostStartAsync()
     {
         try
         {
-            // Start/assign via your existing GameService (unchanged)
             await _svc.StartGameAsync(Id);
-
-            var game = await _db.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == Id);
-            if (game != null)
-            {
-                // Fetch verified participants AFTER StartGame so TargetEmail is set
-                var players = await _db.Players
-                    .Where(p => p.GameId == Id && p.IsEmailVerified)
-                    .ToListAsync();
-
-                // Make sure everyone has a passcode (generate + HASH if missing)
-                bool anyUpdated = false;
-                foreach (var p in players)
-                {
-                    if (string.IsNullOrWhiteSpace(p.PasscodePlaintext))
-                    {
-                        var plain = Passcode.Generate();
-                        var (hash, salt, algo, cost) = Passcode.Hash(plain);
-
-                        p.PasscodePlaintext = plain;
-                        p.PasscodeSetAt = DateTimeOffset.UtcNow;
-
-                        p.PasscodeAlgo = algo;
-                        p.PasscodeCost = cost;
-                        p.PasscodeSalt = salt;
-                        p.PasscodeHash = hash;
-
-                        anyUpdated = true;
-                    }
-                }
-                if (anyUpdated)
-                    await _db.SaveChangesAsync();
-
-                // Send each player their target + their own passcode (no target email/real name/passcode)
-                // var byEmail = players.ToDictionary(p => p.Email, p => p, StringComparer.OrdinalIgnoreCase);
-                // foreach (var me in players)
-                // {
-                //     Player? target = null;
-                //     if (!string.IsNullOrWhiteSpace(me.TargetEmail))
-                //         byEmail.TryGetValue(me.TargetEmail, out target);
-
-                //     try
-                //     {
-                //         var (subject, body) = BuildTargetEmail(game, me, target);
-                //         await _email.SendAsync(me.Email, subject, body);
-                //     }
-                //     catch (Exception exSend)
-                //     {
-                //         _log.LogError(exSend, "Failed to send target email to {Email} for Game {GameId}", me.Email, Id);
-                //     }
-                // }
-            }
         }
         catch (Exception ex)
         {
@@ -199,7 +135,7 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // NEW: Pause the game (only while Active)
+    // Pause the game (only while Active)
     public async Task<IActionResult> OnPostPauseAsync()
     {
         var g = await _db.Games.FindAsync(Id);
@@ -211,7 +147,7 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // NEW: Unpause (resume) the game
+    // Unpause (resume) the game
     public async Task<IActionResult> OnPostUnpauseAsync()
     {
         var g = await _db.Games.FindAsync(Id);
@@ -222,57 +158,4 @@ public class DetailsModel : PageModel
         await _db.SaveChangesAsync();
         return await OnGetAsync(Id);
     }
-
-    // ---------------------------
-    // Helpers
-    // ---------------------------
-    // private (string subject, string body) BuildTargetEmail(Game game, Player me, Player? target)
-    // {
-    //     var gameName = game?.Name ?? $"Game #{Id}";
-    //     var subject = $"{gameName} – Your Target";
-
-    //     string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
-
-    //     var tAlias = target?.Alias ?? "(no target assigned yet)";
-    //     var tDisplay = string.IsNullOrWhiteSpace(target?.DisplayName) ? target?.Alias : target?.DisplayName;
-
-    //     var text = new StringBuilder()
-    //         .AppendLine($"The game \"{gameName}\" has started.")
-    //         .AppendLine()
-    //         .AppendLine($"Your alias: {me.Alias}")
-    //         .AppendLine($"Your passcode: {me.PasscodePlaintext ?? "(not set)"}")
-    //         .AppendLine()
-    //         .AppendLine("Your current target:")
-    //         .AppendLine($"• Alias: {tAlias}")
-    //         .AppendLine($"• Display Name: {tDisplay}")
-    //         .AppendLine()
-    //         .AppendLine("Remember: never share your passcode. Use it when reporting an elimination.")
-    //         .ToString();
-
-    //     var html = new StringBuilder()
-    //         .AppendLine($"<h3>The game \"{H(gameName)}\" has started.</h3>")
-    //         .AppendLine("<p>Here is your assignment:</p>")
-    //         .AppendLine("<ul>")
-    //         .AppendLine($"  <li><strong>Your alias:</strong> {H(me.Alias)}</li>")
-    //         .AppendLine($"  <li><strong>Your passcode:</strong> {H(me.PasscodePlaintext ?? "(not set)")}</li>")
-    //         .AppendLine("</ul>")
-    //         .AppendLine("<p><strong>Your current target:</strong></p>")
-    //         .AppendLine("<ul>")
-    //         .AppendLine($"  <li><strong>Alias:</strong> {H(tAlias)}</li>")
-    //         .AppendLine($"  <li><strong>Display Name:</strong> {H(tDisplay)}</li>")
-    //         .AppendLine("</ul>")
-    //         .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
-
-    //     var combined = new StringBuilder()
-    //         .AppendLine(text)
-    //         .AppendLine()
-    //         .AppendLine("-----")
-    //         .AppendLine("(If your mail client supports HTML, the formatted details appear below.)")
-    //         .AppendLine("-----")
-    //         .AppendLine()
-    //         .AppendLine(html.ToString())
-    //         .ToString();
-
-    //     return (subject, combined);
-    // }
 }
