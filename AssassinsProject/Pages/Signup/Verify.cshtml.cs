@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Services.Email;
+using AssassinsProject.Utilities; // <-- for Passcode.Generate()
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -66,6 +67,19 @@ namespace AssassinsProject.Pages.Signup
             player.IsEmailVerified = true;
             player.IsActive = true;             // now they will show up
             player.VerificationToken = null;    // burn the token
+
+            // Ensure player has a passcode (without touching GameService)
+            if (string.IsNullOrWhiteSpace(player.PasscodePlaintext))
+            {
+                player.PasscodePlaintext = Passcode.Generate();
+                player.PasscodeSetAt = DateTimeOffset.UtcNow;
+
+                player.PasscodeAlgo ??= "argon2id";
+                if (player.PasscodeCost <= 0) player.PasscodeCost = 3;
+                player.PasscodeSalt ??= Array.Empty<byte>();
+                player.PasscodeHash ??= Array.Empty<byte>();
+            }
+
             await _db.SaveChangesAsync();
 
             Verified = true;
@@ -91,7 +105,6 @@ namespace AssassinsProject.Pages.Signup
                 absolutePhotoUrl = baseUrl.TrimEnd('/') + absolutePhotoUrl;
             }
 
-            // Plaintext (safe fallback)
             var text = new StringBuilder()
                 .AppendLine($"You're verified for {gameName}. Here are your submitted details:")
                 .AppendLine()
@@ -112,7 +125,6 @@ namespace AssassinsProject.Pages.Signup
 
             static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
 
-            // Lightweight HTML block appended after plaintext so most clients render nicely
             var html = new StringBuilder()
                 .AppendLine($"<h3>You're verified for {H(gameName)}.</h3>")
                 .AppendLine("<p>Here are your submitted details:</p>")
@@ -142,7 +154,6 @@ namespace AssassinsProject.Pages.Signup
 
             html.AppendLine("<p>If something looks off, reply to this email or contact the organizer.</p>");
 
-            // Combine (keeps IEmailSender simple)
             var combined = new StringBuilder()
                 .AppendLine(text)
                 .AppendLine()
