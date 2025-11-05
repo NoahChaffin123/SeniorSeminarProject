@@ -242,17 +242,27 @@ namespace AssassinsProject.Services
             var okVictim = await VerifyOrRepairPasscodeAsync(victim, providedVictimPasscode, ct);
             if (!okVictim) throw new InvalidOperationException("Victim passcode is incorrect.");
 
+            // Points before we deactivate victim
             var awarded = victim.Points + 1;
             eliminator.Points += awarded;
 
+            // Capture victim's target
             var victimsTargetEmail = victim.TargetEmail;
+
+            // --- IMPORTANT ORDER TO SATISFY UNIQUE INDEX (GameId, TargetEmail) ---
+            // 1) Free the unique slot by clearing the victim's target first.
             victim.IsActive = false;
             victim.TargetEmail = null;
+            await _db.SaveChangesAsync(ct); // ensures UPDATE executes before we set eliminator.TargetEmail
 
-            var stillActive = game.Players.Count(p => p.IsActive);
+            // 2) Move eliminator onto victim's former target (when more than 1 remains)
+            var stillActive = game.Players.Count(p => p.IsActive); // victim already inactive in memory
             if (stillActive > 1)
+            {
                 eliminator.TargetEmail = (victimsTargetEmail == eliminator.Email) ? null : victimsTargetEmail;
+            }
 
+            // 3) Record the elimination
             _db.Eliminations.Add(new Elimination
             {
                 GameId = gameId,
@@ -266,6 +276,7 @@ namespace AssassinsProject.Services
                 VerifiedAt = DateTimeOffset.UtcNow
             });
 
+            // If that deactivated the last remaining opponent, end the game
             if (game.Players.Count(p => p.IsActive) == 1)
             {
                 game.Status = GameStatus.Completed;
@@ -275,24 +286,26 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // ✅ Send "next target" email with elimination confirmation wording
+            // Send "next target" email (only if game continues and a real next target exists)
             if (game.Status == GameStatus.Active && !string.IsNullOrWhiteSpace(eliminator.TargetEmail))
             {
                 var nextTarget = game.Players.FirstOrDefault(p => p.Email == eliminator.TargetEmail);
-                var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName) ? victim.Alias : victim.DisplayName;
-
-                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
-                              ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
-
-                var (subject, html) = BuildNextTargetEmail(game, eliminator, nextTarget, previousTargetName, baseUrl);
-
-                try
+                if (nextTarget is not null)
                 {
-                    await _emailSender.SendAsync(eliminator.Email, subject, html, ct);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Email Error] Next-target email failed for {eliminator.Email}: {ex.Message}");
+                    var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName) ? victim.Alias : victim.DisplayName;
+                    var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                                  ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+                    var (subject, html) = BuildNextTargetEmail(game, eliminator, nextTarget, previousTargetName, baseUrl);
+
+                    try
+                    {
+                        await _emailSender.SendAsync(eliminator.Email, subject, html, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Email Error] Next-target email failed for {eliminator.Email}: {ex.Message}");
+                    }
                 }
             }
         }
@@ -356,8 +369,10 @@ namespace AssassinsProject.Services
 
             var victimsTargetEmail = player.TargetEmail;
 
+            // Order: free unique slot first
             player.IsActive = false;
             player.TargetEmail = null;
+            await _db.SaveChangesAsync(ct);
 
             if (hunter is not null)
                 hunter.TargetEmail = (victimsTargetEmail == hunter.Email) ? null : victimsTargetEmail;

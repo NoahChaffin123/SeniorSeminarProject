@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Utilities;
+using AssassinsProject.Services.Email;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +14,12 @@ namespace AssassinsProject.Pages.Signup
     public class VerifyModel : PageModel
     {
         private readonly AppDbContext _db;
+        private readonly IEmailSender _emailSender;
 
-        public VerifyModel(AppDbContext db)
+        public VerifyModel(AppDbContext db, IEmailSender emailSender)
         {
             _db = db;
+            _emailSender = emailSender;
         }
 
         // Query params
@@ -29,11 +32,10 @@ namespace AssassinsProject.Pages.Signup
         [BindProperty(SupportsGet = true)]
         public string? Token { get; set; }
 
-        // What your .cshtml expects
+        // What the .cshtml expects
         public bool Verified { get; set; }
         public string? Message { get; set; }
 
-        // Optional for the page (if you render it)
         public Game? Game { get; set; }
 
         public async Task<IActionResult> OnGetAsync(CancellationToken ct = default)
@@ -58,7 +60,7 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Already verified? Friendly success.
+            // Already verified -> show success (but don't email again)
             if (player.IsEmailVerified)
             {
                 Verified = true;
@@ -66,7 +68,7 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Need a valid (latest) token
+            // Require a matching (latest) token
             if (string.IsNullOrWhiteSpace(Token) || string.IsNullOrWhiteSpace(player.VerificationToken))
             {
                 Verified = false;
@@ -81,12 +83,13 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Token matches — verify/activate and ensure passcode exists
+            // Token matches — verify and activate
             player.IsEmailVerified = true;
             player.IsActive = true;
             player.VerificationToken = null;
             player.VerificationSentAt = null;
 
+            // Ensure passcode exists
             if (string.IsNullOrWhiteSpace(player.PasscodePlaintext))
             {
                 var plain = Passcode.Generate();
@@ -101,6 +104,22 @@ namespace AssassinsProject.Pages.Signup
             }
 
             await _db.SaveChangesAsync(ct);
+
+            // Fire-and-forget a simple confirmation email
+            try
+            {
+                var subject = $"{Game.Name} – Email Verified";
+                var html = $@"
+<p>If you received this email, this means you are verified. <strong>{Game.Name}</strong>.</p>
+<p>Please note that the game has not yet started</p>
+<p><em>You will receive your passocde in an email once the game starts. Good luck!</em></p>";
+
+                await _emailSender.SendAsync(player.Email, subject, html, ct);
+            }
+            catch (Exception)
+            {
+                // Don't block the page if email fails; verification already succeeded.
+            }
 
             Verified = true;
             Message = "Your email is verified! You're in.";

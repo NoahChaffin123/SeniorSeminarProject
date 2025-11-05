@@ -119,7 +119,7 @@ namespace AssassinsProject.Pages.Signup
             // Normalize email consistently
             var emailNorm = EmailNormalizer.Normalize(emailTrimmed);
 
-            // ***** NEW: Reject duplicates up-front (verified OR unverified) *****
+            // Reject duplicates up-front (verified OR unverified)
             var exists = await _db.Players
                 .AsNoTracking()
                 .AnyAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
@@ -132,7 +132,6 @@ namespace AssassinsProject.Pages.Signup
                 Game = game;
                 return Page();
             }
-            // ***** END new duplicate check *****
 
             // Create the new (unverified) player
             var player = new Player
@@ -159,9 +158,17 @@ namespace AssassinsProject.Pages.Signup
             };
             _db.Players.Add(player);
 
-            // Save REQUIRED photo
+            // Save REQUIRED photo (now with a proper null guard)
+            if (uploaded is null)
+            {
+                // This should be unreachable due to the earlier validation, but guard anyway.
+                ModelState.AddModelError(nameof(Photo), "Please choose a player photo.");
+                Game = game;
+                return Page();
+            }
+
             var (url, contentType, sha256) =
-                await _files.SavePlayerPhotoAsync(GameId, emailNorm, uploaded!, ct);
+                await _files.SavePlayerPhotoAsync(GameId, emailNorm, uploaded, ct);
 
             player.PhotoUrl = url;
             player.PhotoContentType = contentType;
