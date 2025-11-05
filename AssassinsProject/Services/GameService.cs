@@ -1,7 +1,7 @@
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Utilities;
-using AssassinsProject.Services.Email;
+using AssassinsProject.Services.Email; // for IEmailSender + AssignmentEmailBuilder
 using Microsoft.EntityFrameworkCore;
 
 namespace AssassinsProject.Services
@@ -90,6 +90,7 @@ namespace AssassinsProject.Services
                 GameId = gameId,
                 Email = email,
                 EmailNormalized = norm,
+
                 DisplayName = alias,
                 RealName = realName,
                 Alias = alias,
@@ -98,18 +99,21 @@ namespace AssassinsProject.Services
                 VisibleMarkings = visibleMarkings,
                 ApproximateAge = approximateAge,
                 Specialty = specialty,
+
                 IsActive = true,
                 Points = 0,
                 TargetEmail = null,
+
                 PhotoUrl = photoUrl,
                 PhotoContentType = contentType,
                 PhotoBytesSha256 = photoSha256,
+
                 PasscodeHash = hash,
                 PasscodeSalt = salt,
                 PasscodeAlgo = algo,
                 PasscodeCost = cost,
                 PasscodeSetAt = DateTimeOffset.UtcNow,
-                PasscodePlaintext = passcode
+                PasscodePlaintext = passcode // admin can view, not edit
             };
 
             _db.Players.Add(p);
@@ -138,6 +142,7 @@ namespace AssassinsProject.Services
             AssignSingleCycle(players);
             ValidateSingleCycle(players);
 
+            // Close signups and mark active
             game.IsSignupOpen = false;
             game.Status = GameStatus.Active;
             game.StartedAt = DateTimeOffset.UtcNow;
@@ -145,7 +150,7 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // Only send our new assignment email — no duplicates
+            // Only send the new assignment email (no legacy email anywhere)
             await SendAssignmentEmailsAsync(game, players, ct);
         }
 
@@ -157,11 +162,11 @@ namespace AssassinsProject.Services
             {
                 Player? target = null;
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
-                    byEmail.TryGetValue(me.TargetEmail, out target);
+                    byEmail.TryGetValue(me.TargetEmail!, out target);
 
-                // Use environment variable for deployment URL if available
+                // Base URL for public photo links
                 var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
-                            ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+                              ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
 
                 var email = AssignmentEmailBuilder.Build(game, me, target, baseUrl);
 
@@ -237,6 +242,7 @@ namespace AssassinsProject.Services
             if (eliminator.TargetEmail != victim.Email)
                 throw new InvalidOperationException("Victim is not the eliminator's current target.");
 
+            // Verify both passcodes
             var okElim = await VerifyOrRepairPasscodeAsync(eliminator, providedEliminatorPasscode, ct);
             if (!okElim) throw new InvalidOperationException("Your passcode is incorrect.");
             var okVictim = await VerifyOrRepairPasscodeAsync(victim, providedVictimPasscode, ct);

@@ -140,23 +140,23 @@ public class DetailsModel : PageModel
                     await _db.SaveChangesAsync();
 
                 // Send each player their target + their own passcode (no target email/real name/passcode)
-                var byEmail = players.ToDictionary(p => p.Email, p => p, StringComparer.OrdinalIgnoreCase);
-                foreach (var me in players)
-                {
-                    Player? target = null;
-                    if (!string.IsNullOrWhiteSpace(me.TargetEmail))
-                        byEmail.TryGetValue(me.TargetEmail, out target);
+                // var byEmail = players.ToDictionary(p => p.Email, p => p, StringComparer.OrdinalIgnoreCase);
+                // foreach (var me in players)
+                // {
+                //     Player? target = null;
+                //     if (!string.IsNullOrWhiteSpace(me.TargetEmail))
+                //         byEmail.TryGetValue(me.TargetEmail, out target);
 
-                    try
-                    {
-                        var (subject, body) = BuildTargetEmail(game, me, target);
-                        await _email.SendAsync(me.Email, subject, body);
-                    }
-                    catch (Exception exSend)
-                    {
-                        _log.LogError(exSend, "Failed to send target email to {Email} for Game {GameId}", me.Email, Id);
-                    }
-                }
+                //     try
+                //     {
+                //         var (subject, body) = BuildTargetEmail(game, me, target);
+                //         await _email.SendAsync(me.Email, subject, body);
+                //     }
+                //     catch (Exception exSend)
+                //     {
+                //         _log.LogError(exSend, "Failed to send target email to {Email} for Game {GameId}", me.Email, Id);
+                //     }
+                // }
             }
         }
         catch (Exception ex)
@@ -226,53 +226,53 @@ public class DetailsModel : PageModel
     // ---------------------------
     // Helpers
     // ---------------------------
-    private (string subject, string body) BuildTargetEmail(Game game, Player me, Player? target)
-    {
-        var gameName = game?.Name ?? $"Game #{Id}";
-        var subject = $"{gameName} – Your Target";
+    // private (string subject, string body) BuildTargetEmail(Game game, Player me, Player? target)
+    // {
+    //     var gameName = game?.Name ?? $"Game #{Id}";
+    //     var subject = $"{gameName} – Your Target";
 
-        string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
+    //     string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
 
-        var tAlias = target?.Alias ?? "(no target assigned yet)";
-        var tDisplay = string.IsNullOrWhiteSpace(target?.DisplayName) ? target?.Alias : target?.DisplayName;
+    //     var tAlias = target?.Alias ?? "(no target assigned yet)";
+    //     var tDisplay = string.IsNullOrWhiteSpace(target?.DisplayName) ? target?.Alias : target?.DisplayName;
 
-        var text = new StringBuilder()
-            .AppendLine($"The game \"{gameName}\" has started.")
-            .AppendLine()
-            .AppendLine($"Your alias: {me.Alias}")
-            .AppendLine($"Your passcode: {me.PasscodePlaintext ?? "(not set)"}")
-            .AppendLine()
-            .AppendLine("Your current target:")
-            .AppendLine($"• Alias: {tAlias}")
-            .AppendLine($"• Display Name: {tDisplay}")
-            .AppendLine()
-            .AppendLine("Remember: never share your passcode. Use it when reporting an elimination.")
-            .ToString();
+    //     var text = new StringBuilder()
+    //         .AppendLine($"The game \"{gameName}\" has started.")
+    //         .AppendLine()
+    //         .AppendLine($"Your alias: {me.Alias}")
+    //         .AppendLine($"Your passcode: {me.PasscodePlaintext ?? "(not set)"}")
+    //         .AppendLine()
+    //         .AppendLine("Your current target:")
+    //         .AppendLine($"• Alias: {tAlias}")
+    //         .AppendLine($"• Display Name: {tDisplay}")
+    //         .AppendLine()
+    //         .AppendLine("Remember: never share your passcode. Use it when reporting an elimination.")
+    //         .ToString();
 
-        var html = new StringBuilder()
-            .AppendLine($"<h3>The game \"{H(gameName)}\" has started.</h3>")
-            .AppendLine("<p>Here is your assignment:</p>")
-            .AppendLine("<ul>")
-            .AppendLine($"  <li><strong>Your alias:</strong> {H(me.Alias)}</li>")
-            .AppendLine($"  <li><strong>Your passcode:</strong> {H(me.PasscodePlaintext ?? "(not set)")}</li>")
-            .AppendLine("</ul>")
-            .AppendLine("<p><strong>Your current target:</strong></p>")
-            .AppendLine("<ul>")
-            .AppendLine($"  <li><strong>Alias:</strong> {H(tAlias)}</li>")
-            .AppendLine($"  <li><strong>Display Name:</strong> {H(tDisplay)}</li>")
-            .AppendLine("</ul>")
-            .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
+    //     var html = new StringBuilder()
+    //         .AppendLine($"<h3>The game \"{H(gameName)}\" has started.</h3>")
+    //         .AppendLine("<p>Here is your assignment:</p>")
+    //         .AppendLine("<ul>")
+    //         .AppendLine($"  <li><strong>Your alias:</strong> {H(me.Alias)}</li>")
+    //         .AppendLine($"  <li><strong>Your passcode:</strong> {H(me.PasscodePlaintext ?? "(not set)")}</li>")
+    //         .AppendLine("</ul>")
+    //         .AppendLine("<p><strong>Your current target:</strong></p>")
+    //         .AppendLine("<ul>")
+    //         .AppendLine($"  <li><strong>Alias:</strong> {H(tAlias)}</li>")
+    //         .AppendLine($"  <li><strong>Display Name:</strong> {H(tDisplay)}</li>")
+    //         .AppendLine("</ul>")
+    //         .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
 
-        var combined = new StringBuilder()
-            .AppendLine(text)
-            .AppendLine()
-            .AppendLine("-----")
-            .AppendLine("(If your mail client supports HTML, the formatted details appear below.)")
-            .AppendLine("-----")
-            .AppendLine()
-            .AppendLine(html.ToString())
-            .ToString();
+    //     var combined = new StringBuilder()
+    //         .AppendLine(text)
+    //         .AppendLine()
+    //         .AppendLine("-----")
+    //         .AppendLine("(If your mail client supports HTML, the formatted details appear below.)")
+    //         .AppendLine("-----")
+    //         .AppendLine()
+    //         .AppendLine(html.ToString())
+    //         .ToString();
 
-        return (subject, combined);
-    }
+    //     return (subject, combined);
+    // }
 }
