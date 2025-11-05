@@ -76,16 +76,12 @@ namespace AssassinsProject.Pages.Signup
                 ModelState.AddModelError(string.Empty, "Signups are closed.");
             }
 
-            // --- Domain restriction (optional) ---
+            // --- Domain restriction (left disabled per your comment) ---
             var emailTrimmed = (Email ?? string.Empty).Trim();
-
-            // // Enforce Hendrix emails if you want:
             // if (!emailTrimmed.EndsWith("@hendrix.edu", StringComparison.OrdinalIgnoreCase))
-            // {
             //     ModelState.AddModelError(nameof(Email), "Use your @hendrix.edu email address.");
-            // }
 
-            // --- Grab uploaded file robustly (required) ---
+            // --- Robustly capture the uploaded file (required) ---
             IFormFile? uploaded = Photo;
             if (uploaded is null || uploaded.Length == 0)
             {
@@ -99,7 +95,6 @@ namespace AssassinsProject.Pages.Signup
                 ModelState.AddModelError(nameof(Photo), "Please choose a player photo.");
             }
 
-            // Default DisplayName if blank
             if (string.IsNullOrWhiteSpace(DisplayName))
             {
                 DisplayName = !string.IsNullOrWhiteSpace(RealName)
@@ -109,17 +104,7 @@ namespace AssassinsProject.Pages.Signup
                 ModelState.Remove(nameof(DisplayName));
             }
 
-            // Normalize email now so we can check duplicates early
-            var emailNorm = EmailNormalizer.Normalize(emailTrimmed);
-
-            // ======== NEW: hard reject duplicate email in this game ========
-            if (await _db.Players.AnyAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct))
-            {
-                ModelState.AddModelError(nameof(Email),
-                    "This email is already registered for this game. If you need the verification link re-sent or need changes, contact the organizer.");
-            }
-            // =================================================================
-
+            // Bail early on validation errors
             if (!ModelState.IsValid)
             {
                 foreach (var kv in ModelState)
@@ -131,7 +116,25 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Create a brand-new player (no overwrite path)
+            // Normalize email consistently
+            var emailNorm = EmailNormalizer.Normalize(emailTrimmed);
+
+            // ***** NEW: Reject duplicates up-front (verified OR unverified) *****
+            var exists = await _db.Players
+                .AsNoTracking()
+                .AnyAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
+
+            if (exists)
+            {
+                ModelState.AddModelError(nameof(Email),
+                    "This email is already registered for this game. " +
+                    "If you need a verification link, check your inbox/spam or contact the organizer.");
+                Game = game;
+                return Page();
+            }
+            // ***** END new duplicate check *****
+
+            // Create the new (unverified) player
             var player = new Player
             {
                 GameId = GameId,
@@ -145,18 +148,15 @@ namespace AssassinsProject.Pages.Signup
                 VisibleMarkings = VisibleMarkings?.Trim(),
                 ApproximateAge = ApproximateAge,
                 Specialty = Specialty?.Trim(),
-                IsActive = false,           
+                IsActive = false,           // locked until verified
                 IsEmailVerified = false,
                 Points = 0,
-
-                // passcode fields are initialized; final passcode assigned on verification if needed
                 PasscodeAlgo = "argon2id",
                 PasscodeCost = 3,
                 PasscodeHash = Array.Empty<byte>(),
                 PasscodeSalt = Array.Empty<byte>(),
                 PasscodeSetAt = DateTimeOffset.UtcNow
             };
-
             _db.Players.Add(player);
 
             // Save REQUIRED photo
