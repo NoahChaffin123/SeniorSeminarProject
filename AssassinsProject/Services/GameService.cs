@@ -1,8 +1,9 @@
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Utilities;
-using AssassinsProject.Services.Email; // for IEmailSender + AssignmentEmailBuilder
+using AssassinsProject.Services.Email;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace AssassinsProject.Services
 {
@@ -90,7 +91,6 @@ namespace AssassinsProject.Services
                 GameId = gameId,
                 Email = email,
                 EmailNormalized = norm,
-
                 DisplayName = alias,
                 RealName = realName,
                 Alias = alias,
@@ -99,21 +99,18 @@ namespace AssassinsProject.Services
                 VisibleMarkings = visibleMarkings,
                 ApproximateAge = approximateAge,
                 Specialty = specialty,
-
                 IsActive = true,
                 Points = 0,
                 TargetEmail = null,
-
                 PhotoUrl = photoUrl,
                 PhotoContentType = contentType,
                 PhotoBytesSha256 = photoSha256,
-
                 PasscodeHash = hash,
                 PasscodeSalt = salt,
                 PasscodeAlgo = algo,
                 PasscodeCost = cost,
                 PasscodeSetAt = DateTimeOffset.UtcNow,
-                PasscodePlaintext = passcode // admin can view, not edit
+                PasscodePlaintext = passcode
             };
 
             _db.Players.Add(p);
@@ -142,7 +139,6 @@ namespace AssassinsProject.Services
             AssignSingleCycle(players);
             ValidateSingleCycle(players);
 
-            // Close signups and mark active
             game.IsSignupOpen = false;
             game.Status = GameStatus.Active;
             game.StartedAt = DateTimeOffset.UtcNow;
@@ -150,7 +146,7 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // Only send the new assignment email (no legacy email anywhere)
+            // ✅ Send "assignment" email to each player (the full “game started” template)
             await SendAssignmentEmailsAsync(game, players, ct);
         }
 
@@ -162,9 +158,8 @@ namespace AssassinsProject.Services
             {
                 Player? target = null;
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
-                    byEmail.TryGetValue(me.TargetEmail!, out target);
+                    byEmail.TryGetValue(me.TargetEmail, out target);
 
-                // Base URL for public photo links
                 var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
                               ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
 
@@ -242,7 +237,6 @@ namespace AssassinsProject.Services
             if (eliminator.TargetEmail != victim.Email)
                 throw new InvalidOperationException("Victim is not the eliminator's current target.");
 
-            // Verify both passcodes
             var okElim = await VerifyOrRepairPasscodeAsync(eliminator, providedEliminatorPasscode, ct);
             if (!okElim) throw new InvalidOperationException("Your passcode is incorrect.");
             var okVictim = await VerifyOrRepairPasscodeAsync(victim, providedVictimPasscode, ct);
@@ -280,6 +274,27 @@ namespace AssassinsProject.Services
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // ✅ Send "next target" email with elimination confirmation wording
+            if (game.Status == GameStatus.Active && !string.IsNullOrWhiteSpace(eliminator.TargetEmail))
+            {
+                var nextTarget = game.Players.FirstOrDefault(p => p.Email == eliminator.TargetEmail);
+                var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName) ? victim.Alias : victim.DisplayName;
+
+                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                              ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+                var (subject, html) = BuildNextTargetEmail(game, eliminator, nextTarget, previousTargetName, baseUrl);
+
+                try
+                {
+                    await _emailSender.SendAsync(eliminator.Email, subject, html, ct);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Email Error] Next-target email failed for {eliminator.Email}: {ex.Message}");
+                }
+            }
         }
 
         private async Task<bool> VerifyOrRepairPasscodeAsync(Player p, string provided, CancellationToken ct)
@@ -355,6 +370,62 @@ namespace AssassinsProject.Services
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+        }
+
+        // -------------------------
+        // Email builder for "next target" after elimination
+        // -------------------------
+        private static (string subject, string html) BuildNextTargetEmail(
+            Game game,
+            Player me,
+            Player? nextTarget,
+            string previousTargetName,
+            string baseUrl)
+        {
+            string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
+
+            var gameName = game?.Name ?? "Assassins";
+            var subject = $"Elimination Confirmation of {previousTargetName}";
+
+            var tAlias = nextTarget?.Alias ?? "(no target assigned yet)";
+            var tDisplay = string.IsNullOrWhiteSpace(nextTarget?.DisplayName) ? nextTarget?.Alias : nextTarget?.DisplayName;
+
+            var details = new StringBuilder()
+                .AppendLine("<ul>")
+                .AppendLine($"  <li><strong>Alias:</strong> {H(tAlias)}</li>")
+                .AppendLine($"  <li><strong>Display Name:</strong> {H(tDisplay)}</li>");
+
+            if (nextTarget is not null)
+            {
+                if (nextTarget.ApproximateAge.HasValue) details.AppendLine($"  <li><strong>Approximate Age:</strong> {nextTarget.ApproximateAge.Value}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.HairColor)) details.AppendLine($"  <li><strong>Hair Color:</strong> {H(nextTarget.HairColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.EyeColor)) details.AppendLine($"  <li><strong>Eye Color:</strong> {H(nextTarget.EyeColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.VisibleMarkings)) details.AppendLine($"  <li><strong>Visible Markings:</strong> {H(nextTarget.VisibleMarkings)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.Specialty)) details.AppendLine($"  <li><strong>Specialty:</strong> {H(nextTarget.Specialty)}</li>");
+
+                // Photo link (if available)
+                if (!string.IsNullOrWhiteSpace(nextTarget.PhotoUrl))
+                {
+                    var photoUrl = nextTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                        ? nextTarget.PhotoUrl!
+                        : $"{baseUrl.TrimEnd('/')}/{nextTarget.PhotoUrl!.TrimStart('/')}";
+
+                    details.AppendLine($"  <li><strong>Photo:</strong> <a href=\"{H(photoUrl)}\">{H(photoUrl)}</a></li>");
+                }
+            }
+
+            details.AppendLine("</ul>");
+
+            var html = new StringBuilder()
+                .AppendLine($"<h2>{H(gameName)} – Next Target</h2>")
+                .AppendLine($"<p>Your elimination of <strong>{H(previousTargetName)}</strong> is confirmed. Here is the information of your next target:</p>")
+                .AppendLine("<p><strong>Your passcode:</strong> " + H(me.PasscodePlaintext ?? "(not set)") + "</p>")
+                .AppendLine("<p><strong>Your current target:</strong></p>")
+                .AppendLine(details.ToString())
+                .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>")
+                .ToString();
+
+            return (subject, html);
         }
     }
 }
