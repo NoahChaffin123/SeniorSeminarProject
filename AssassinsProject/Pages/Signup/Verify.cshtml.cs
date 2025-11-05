@@ -1,11 +1,9 @@
 using System;
-using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
-using AssassinsProject.Services.Email;
-using AssassinsProject.Utilities; 
+using AssassinsProject.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -15,159 +13,98 @@ namespace AssassinsProject.Pages.Signup
     public class VerifyModel : PageModel
     {
         private readonly AppDbContext _db;
-        private readonly IEmailSender _email;
 
-        public VerifyModel(AppDbContext db, IEmailSender email)
+        public VerifyModel(AppDbContext db)
         {
             _db = db;
-            _email = email;
         }
 
-        // incoming from /Signup/Verify?gameId=...&email=...&token=...
-        [BindProperty(SupportsGet = true)] public int GameId { get; set; }
-        [BindProperty(SupportsGet = true)] public string Email { get; set; } = string.Empty;
-        [BindProperty(SupportsGet = true)] public string Token { get; set; } = string.Empty;
+        // Query params
+        [BindProperty(SupportsGet = true)]
+        public int GameId { get; set; }
 
-        // for the view
+        [BindProperty(SupportsGet = true)]
+        public string? Email { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? Token { get; set; }
+
+        // What your .cshtml expects
         public bool Verified { get; set; }
-        public string Message { get; set; } = string.Empty;
+        public string? Message { get; set; }
 
-        public async Task<IActionResult> OnGetAsync()
+        // Optional for the page (if you render it)
+        public Game? Game { get; set; }
+
+        public async Task<IActionResult> OnGetAsync(CancellationToken ct = default)
         {
-            // Get game
-            var game = await _db.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == GameId);
-            if (game is null)
-            {
-                Verified = false;
-                Message = "Game not found.";
-                return Page();
-            }
+            Game = await _db.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == GameId, ct);
 
-            // Find the player row by (GameId, Email)
-            var emailNorm = (Email ?? string.Empty).Trim().ToUpperInvariant();
-            var player = await _db.Players.FirstOrDefaultAsync(p =>
-                p.GameId == GameId && p.EmailNormalized == emailNorm);
-
-            if (player is null)
-            {
-                Verified = false;
-                Message = "Player not found for this game.";
-                return Page();
-            }
-
-            // Validate token
-            if (string.IsNullOrWhiteSpace(Token) || !string.Equals(Token, player.VerificationToken, StringComparison.Ordinal))
+            if (GameId <= 0 || string.IsNullOrWhiteSpace(Email) || Game is null)
             {
                 Verified = false;
                 Message = "Invalid or missing verification token.";
                 return Page();
             }
 
-            // Mark verified and allow them to appear in game
-            player.IsEmailVerified = true;
-            player.IsActive = true;             // now they will show up
-            player.VerificationToken = null;    // burn the token
+            var emailNorm = EmailNormalizer.Normalize(Email);
+            var player = await _db.Players
+                .FirstOrDefaultAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
 
-            // Ensure player has a passcode, and store HASH + SALT + COST
+            if (player is null)
+            {
+                Verified = false;
+                Message = "We couldn't find a signup for that email in this game.";
+                return Page();
+            }
+
+            // Already verified? Friendly success.
+            if (player.IsEmailVerified)
+            {
+                Verified = true;
+                Message = "You're already verified and in the game. See you on the field!";
+                return Page();
+            }
+
+            // Need a valid (latest) token
+            if (string.IsNullOrWhiteSpace(Token) || string.IsNullOrWhiteSpace(player.VerificationToken))
+            {
+                Verified = false;
+                Message = "Invalid or missing verification token.";
+                return Page();
+            }
+
+            if (!string.Equals(Token, player.VerificationToken, StringComparison.Ordinal))
+            {
+                Verified = false;
+                Message = "This verification link is invalid or has expired. If you requested multiple links, use the most recent one.";
+                return Page();
+            }
+
+            // Token matches — verify/activate and ensure passcode exists
+            player.IsEmailVerified = true;
+            player.IsActive = true;
+            player.VerificationToken = null;
+            player.VerificationSentAt = null;
+
             if (string.IsNullOrWhiteSpace(player.PasscodePlaintext))
             {
                 var plain = Passcode.Generate();
                 var (hash, salt, algo, cost) = Passcode.Hash(plain);
 
                 player.PasscodePlaintext = plain;
-                player.PasscodeSetAt = DateTimeOffset.UtcNow;
-
+                player.PasscodeHash = hash;
+                player.PasscodeSalt = salt;
                 player.PasscodeAlgo = algo;
                 player.PasscodeCost = cost;
-                player.PasscodeSalt = salt;
-                player.PasscodeHash = hash;
+                player.PasscodeSetAt = DateTimeOffset.UtcNow;
             }
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
 
             Verified = true;
-            Message = "Your email has been verified. You're in!";
-
-            // Send their “details” email right away (subject includes game name, includes photo)
-            await SendDetailsEmailAsync(game, player);
-
+            Message = "Your email is verified! You're in.";
             return Page();
-        }
-
-        private async Task SendDetailsEmailAsync(Game game, Player player)
-        {
-            var gameName = game?.Name ?? $"Game #{player.GameId}";
-            var subject = $"{gameName} Details - Verification Successful";
-
-            // Build absolute photo URL if it stored a relative path
-            string? absolutePhotoUrl = player.PhotoUrl;
-            if (!string.IsNullOrWhiteSpace(absolutePhotoUrl) &&
-                Uri.TryCreate(absolutePhotoUrl, UriKind.Relative, out _))
-            {
-                var baseUrl = $"{Request.Scheme}://{Request.Host}";
-                absolutePhotoUrl = baseUrl.TrimEnd('/') + absolutePhotoUrl;
-            }
-
-            var text = new StringBuilder()
-                .AppendLine($"You're verified for {gameName}. Here are your submitted details:")
-                .AppendLine()
-                .AppendLine($"Email: {player.Email}")
-                .AppendLine($"Real Name: {player.RealName}")
-                .AppendLine($"Display Name: {player.DisplayName}")
-                .AppendLine($"Alias: {player.Alias}")
-                .AppendLine($"Approximate Age: {(player.ApproximateAge?.ToString() ?? "N/A")}")
-                .AppendLine($"Hair Color: {player.HairColor ?? "N/A"}")
-                .AppendLine($"Eye Color: {player.EyeColor ?? "N/A"}")
-                .AppendLine($"Visible Markings: {player.VisibleMarkings ?? "N/A"}")
-                .AppendLine($"Specialty: {player.Specialty ?? "N/A"}")
-                .AppendLine()
-                .AppendLine($"Photo: {(string.IsNullOrWhiteSpace(absolutePhotoUrl) ? "N/A" : absolutePhotoUrl)}")
-                .AppendLine()
-                .AppendLine("If something looks off, reply to this email or contact the organizer.")
-                .ToString();
-
-            static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
-
-            var html = new StringBuilder()
-                .AppendLine($"<h3>You're verified for {H(gameName)}.</h3>")
-                .AppendLine("<p>Here are your submitted details:</p>")
-                .AppendLine("<ul>")
-                .AppendLine($"  <li><strong>Email:</strong> {H(player.Email)}</li>")
-                .AppendLine($"  <li><strong>Real Name:</strong> {H(player.RealName)}</li>")
-                .AppendLine($"  <li><strong>Display Name:</strong> {H(player.DisplayName)}</li>")
-                .AppendLine($"  <li><strong>Alias:</strong> {H(player.Alias)}</li>")
-                .AppendLine($"  <li><strong>Approximate Age:</strong> {H(player.ApproximateAge?.ToString() ?? "N/A")}</li>")
-                .AppendLine($"  <li><strong>Hair Color:</strong> {H(player.HairColor ?? "N/A")}</li>")
-                .AppendLine($"  <li><strong>Eye Color:</strong> {H(player.EyeColor ?? "N/A")}</li>")
-                .AppendLine($"  <li><strong>Visible Markings:</strong> {H(player.VisibleMarkings ?? "N/A")}</li>")
-                .AppendLine($"  <li><strong>Specialty:</strong> {H(player.Specialty ?? "N/A")}</li>")
-                .AppendLine("</ul>");
-
-            if (!string.IsNullOrWhiteSpace(absolutePhotoUrl))
-            {
-                var safe = H(absolutePhotoUrl);
-                html.AppendLine("<p><strong>Photo:</strong></p>");
-                html.AppendLine($"<p><img src=\"{safe}\" alt=\"Your submitted photo\" style=\"max-width:320px;height:auto;border-radius:8px;border:1px solid #ddd\" /></p>");
-                html.AppendLine($"<p><a href=\"{safe}\">Open full-size photo</a></p>");
-            }
-            else
-            {
-                html.AppendLine("<p><strong>Photo:</strong> N/A</p>");
-            }
-
-            html.AppendLine("<p>If something looks off, reply to this email or contact the organizer.</p>");
-
-            var combined = new StringBuilder()
-                .AppendLine(text)
-                .AppendLine()
-                .AppendLine("-----")
-                .AppendLine("(If your mail client supports HTML, the details and your photo appear below.)")
-                .AppendLine("-----")
-                .AppendLine()
-                .AppendLine(html.ToString())
-                .ToString();
-
-            await _email.SendAsync(player.Email, subject, combined);
         }
     }
 }
