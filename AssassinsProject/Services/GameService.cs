@@ -159,7 +159,12 @@ namespace AssassinsProject.Services
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
                     byEmail.TryGetValue(me.TargetEmail, out target);
 
-                var email = AssignmentEmailBuilder.Build(game, me, target, "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net");
+               
+                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL") 
+                            ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+                var email = AssignmentEmailBuilder.Build(game, me, target, baseUrl);
+
 
                 try
                 {
