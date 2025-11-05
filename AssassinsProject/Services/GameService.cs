@@ -145,7 +145,7 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // ✅ Send "assignment" email to each player
+            // Only send our new assignment email — no duplicates
             await SendAssignmentEmailsAsync(game, players, ct);
         }
 
@@ -159,12 +159,11 @@ namespace AssassinsProject.Services
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
                     byEmail.TryGetValue(me.TargetEmail, out target);
 
-               
-                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL") 
+                // Use environment variable for deployment URL if available
+                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
                             ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
 
                 var email = AssignmentEmailBuilder.Build(game, me, target, baseUrl);
-
 
                 try
                 {
