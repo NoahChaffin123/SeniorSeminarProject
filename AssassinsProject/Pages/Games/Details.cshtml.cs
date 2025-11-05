@@ -116,18 +116,23 @@ public class DetailsModel : PageModel
                     .Where(p => p.GameId == Id && p.IsEmailVerified)
                     .ToListAsync();
 
-                // Make sure everyone has a passcode (use Passcode.cs)
+                // Make sure everyone has a passcode (generate + HASH if missing)
                 bool anyUpdated = false;
                 foreach (var p in players)
                 {
                     if (string.IsNullOrWhiteSpace(p.PasscodePlaintext))
                     {
-                        p.PasscodePlaintext = Passcode.Generate();
+                        var plain = Passcode.Generate();
+                        var (hash, salt, algo, cost) = Passcode.Hash(plain);
+
+                        p.PasscodePlaintext = plain;
                         p.PasscodeSetAt = DateTimeOffset.UtcNow;
-                        p.PasscodeAlgo ??= "argon2id";
-                        if (p.PasscodeCost <= 0) p.PasscodeCost = 3;
-                        p.PasscodeSalt ??= Array.Empty<byte>();
-                        p.PasscodeHash ??= Array.Empty<byte>();
+
+                        p.PasscodeAlgo = algo;
+                        p.PasscodeCost = cost;
+                        p.PasscodeSalt = salt;
+                        p.PasscodeHash = hash;
+
                         anyUpdated = true;
                     }
                 }

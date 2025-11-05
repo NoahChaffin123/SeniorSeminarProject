@@ -26,9 +26,8 @@ namespace AssassinsProject.Data
                  .HasForeignKey(p => p.GameId)
                  .OnDelete(DeleteBehavior.Cascade);
 
-                // Link Eliminations to GameId WITHOUT requiring an Elimination.Game nav
                 e.HasMany(g => g.Eliminations)
-                 .WithOne() 
+                 .WithOne()
                  .HasForeignKey(el => el.GameId)
                  .OnDelete(DeleteBehavior.Cascade);
             });
@@ -45,19 +44,16 @@ namespace AssassinsProject.Data
                 e.Property(p => p.Alias).HasMaxLength(100).IsRequired();
                 e.Property(p => p.TargetEmail).HasMaxLength(256);
 
-                // Helpful indexes
                 e.HasIndex(p => new { p.GameId, p.Email });
                 e.HasIndex(p => new { p.GameId, p.Alias });
                 e.HasIndex(p => new { p.GameId, p.EmailNormalized });
                 e.HasIndex(p => new { p.GameId, p.TargetEmail });
 
-                // Explicit FK to Game prevents EF from inventing a shadow GameId1
                 e.HasOne(p => p.Game)
                  .WithMany(g => g.Players)
                  .HasForeignKey(p => p.GameId)
                  .OnDelete(DeleteBehavior.Cascade);
 
-                // Optional: self-ref target link; use NON-GENERIC HasPrincipalKey overload
                 e.HasOne(p => p.Target)
                  .WithMany()
                  .HasForeignKey(p => new { p.GameId, p.TargetEmail })
@@ -72,29 +68,27 @@ namespace AssassinsProject.Data
 
                 e.Property(x => x.EliminatorEmail).HasMaxLength(256).IsRequired();
                 e.Property(x => x.VictimEmail).HasMaxLength(256).IsRequired();
-                e.Property(x => x.Notes).HasMaxLength(1000);
 
-                // FK to Game via GameId; no nav on Elimination
+                // FK to Game via GameId
                 e.HasOne<Game>()
                  .WithMany(g => g.Eliminations)
                  .HasForeignKey(x => x.GameId)
                  .OnDelete(DeleteBehavior.Cascade);
 
-                // Eliminator -> Player (composite FK to Players(GameId, Email))
+                // Eliminator -> Player via (EliminatorGameId, EliminatorEmail)
                 e.HasOne(x => x.Eliminator)
                  .WithMany()
                  .HasForeignKey(x => new { x.EliminatorGameId, x.EliminatorEmail })
                  .HasPrincipalKey(nameof(Player.GameId), nameof(Player.Email))
                  .OnDelete(DeleteBehavior.NoAction);
 
-                // Victim -> Player (composite FK to Players(GameId, Email))
+                // Victim -> Player via (VictimGameId, VictimEmail)
                 e.HasOne(x => x.Victim)
                  .WithMany()
                  .HasForeignKey(x => new { x.VictimGameId, x.VictimEmail })
                  .HasPrincipalKey(nameof(Player.GameId), nameof(Player.Email))
                  .OnDelete(DeleteBehavior.NoAction);
 
-                // Composite indexes for lookups
                 e.HasIndex(x => new { x.EliminatorGameId, x.EliminatorEmail });
                 e.HasIndex(x => new { x.VictimGameId, x.VictimEmail });
             });

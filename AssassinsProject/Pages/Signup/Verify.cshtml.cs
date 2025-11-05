@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Services.Email;
-using AssassinsProject.Utilities; // <-- for Passcode.Generate()
+using AssassinsProject.Utilities; 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -68,16 +68,19 @@ namespace AssassinsProject.Pages.Signup
             player.IsActive = true;             // now they will show up
             player.VerificationToken = null;    // burn the token
 
-            // Ensure player has a passcode (without touching GameService)
+            // Ensure player has a passcode, and store HASH + SALT + COST
             if (string.IsNullOrWhiteSpace(player.PasscodePlaintext))
             {
-                player.PasscodePlaintext = Passcode.Generate();
+                var plain = Passcode.Generate();
+                var (hash, salt, algo, cost) = Passcode.Hash(plain);
+
+                player.PasscodePlaintext = plain;
                 player.PasscodeSetAt = DateTimeOffset.UtcNow;
 
-                player.PasscodeAlgo ??= "argon2id";
-                if (player.PasscodeCost <= 0) player.PasscodeCost = 3;
-                player.PasscodeSalt ??= Array.Empty<byte>();
-                player.PasscodeHash ??= Array.Empty<byte>();
+                player.PasscodeAlgo = algo;
+                player.PasscodeCost = cost;
+                player.PasscodeSalt = salt;
+                player.PasscodeHash = hash;
             }
 
             await _db.SaveChangesAsync();
@@ -96,7 +99,7 @@ namespace AssassinsProject.Pages.Signup
             var gameName = game?.Name ?? $"Game #{player.GameId}";
             var subject = $"{gameName} Details - Verification Successful";
 
-            // Build absolute photo URL if we stored a relative path
+            // Build absolute photo URL if it stored a relative path
             string? absolutePhotoUrl = player.PhotoUrl;
             if (!string.IsNullOrWhiteSpace(absolutePhotoUrl) &&
                 Uri.TryCreate(absolutePhotoUrl, UriKind.Relative, out _))

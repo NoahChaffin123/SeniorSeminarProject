@@ -9,7 +9,7 @@ namespace AssassinsProject.Models
         // Scope to a game
         public int GameId { get; set; }
 
-        // Composite FKs to Players(GameId, Email)
+        // Composite FKs to Players(GameId, Email) — matches your DB
         public int EliminatorGameId { get; set; }
         public string EliminatorEmail { get; set; } = null!;
         public int VictimGameId { get; set; }
@@ -20,10 +20,6 @@ namespace AssassinsProject.Models
         public bool PasscodeVerified { get; set; }
         public int PointsAwarded { get; set; }
         public DateTimeOffset? VerifiedAt { get; set; }
-
-        // These two columns are missing in your database right now:
-        public string? EvidenceUrl { get; set; }     
-        public string? Notes { get; set; }          
 
         // Navigations (optional)
         public Player? Eliminator { get; set; }

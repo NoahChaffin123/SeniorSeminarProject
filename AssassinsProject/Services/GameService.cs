@@ -1,461 +1,350 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
+using AssassinsProject.Utilities;
 using AssassinsProject.Services.Email;
-using AssassinsProject.Utilities; // Passcode.Generate / Passcode.Hash / Passcode.Verify
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AssassinsProject.Services
 {
-    /// <summary>
-    /// Game orchestration (create, start, ring assignment, reporting, admin helpers).
-    /// </summary>
     public class GameService
     {
         private readonly AppDbContext _db;
-        private readonly IEmailSender _email;
-        private readonly ILogger<GameService> _log;
+        private readonly IEmailSender _emailSender;
 
-        public GameService(AppDbContext db, IEmailSender email, ILogger<GameService> log)
+        public GameService(AppDbContext db, IEmailSender emailSender)
         {
             _db = db;
-            _email = email;
-            _log = log;
+            _emailSender = emailSender;
         }
 
-        // ------------------------------------------------------------------
-        // Ensure a player has a valid (generated + hashed) passcode.
-        // IMPORTANT: Passcode.Hash returns (hash: byte[], salt: byte[], algo: string, cost: int)
-        // ------------------------------------------------------------------
-        private static bool EnsurePlayerPasscode(Player p)
+        // -------------------------
+        // Game creation / players
+        // -------------------------
+        public async Task<Game> CreateGameAsync(string name, CancellationToken ct = default)
         {
-            bool changed = false;
-
-            if (string.IsNullOrWhiteSpace(p.PasscodePlaintext))
-            {
-                p.PasscodePlaintext = Passcode.Generate();   // e.g., 7–8 uppercase letters/digits
-                p.PasscodeSetAt = DateTimeOffset.UtcNow;
-                changed = true;
-            }
-
-            var needsAlgo = string.IsNullOrWhiteSpace(p.PasscodeAlgo);
-            var needsCost = p.PasscodeCost <= 0;
-            var needsSalt = p.PasscodeSalt == null || p.PasscodeSalt.Length == 0;
-            var needsHash = p.PasscodeHash == null || p.PasscodeHash.Length == 0;
-
-            if (needsAlgo || needsCost || needsSalt || needsHash)
-            {
-                // (hash, salt, algo, cost) — keep order in sync with your utility.
-                var (hash, salt, algo, cost) = Passcode.Hash(p.PasscodePlaintext!);
-
-                p.PasscodeHash = hash;   // byte[]
-                p.PasscodeSalt = salt;   // byte[]
-                p.PasscodeAlgo = algo;   // string
-                p.PasscodeCost = cost;   // iterations/cost
-
-                if (p.PasscodeSetAt == default)
-                    p.PasscodeSetAt = DateTimeOffset.UtcNow;
-
-                changed = true;
-            }
-
-            return changed;
+            var game = new Game { Name = name, Status = GameStatus.Setup, IsSignupOpen = true };
+            _db.Games.Add(game);
+            await _db.SaveChangesAsync(ct);
+            return game;
         }
 
-        // ------------------------------------------------------------------
-        // Create game (used by Pages/Games/Create.cshtml.cs)
-        // ------------------------------------------------------------------
-        public async Task<Game> CreateGameAsync(string name)
+        // Admin add (full details just like public signup)
+        public async Task<(Player player, string passcode)> AddPlayerAdminAsync(
+            int gameId,
+            string email,
+            string realName,
+            string alias,
+            string? hairColor,
+            string? eyeColor,
+            string? visibleMarkings,
+            int? approximateAge,
+            string? specialty,
+            string? photoUrl,
+            string? contentType,
+            byte[]? photoSha256,
+            CancellationToken ct = default)
+            => await AddPlayerWithDetailsAsync(
+                gameId, email, realName, alias, hairColor, eyeColor, visibleMarkings, approximateAge, specialty,
+                photoUrl, contentType, photoSha256, ct);
+
+        // Public/admin add implementation
+        public async Task<(Player player, string passcode)> AddPlayerWithDetailsAsync(
+            int gameId,
+            string email,
+            string realName,
+            string alias,
+            string? hairColor,
+            string? eyeColor,
+            string? visibleMarkings,
+            int? approximateAge,
+            string? specialty,
+            string? photoUrl,
+            string? contentType,
+            byte[]? photoSha256,
+            CancellationToken ct = default)
         {
-            var g = new Game
+            var norm = EmailNormalizer.Normalize(email);
+
+            var game = await _db.Games.SingleAsync(g => g.Id == gameId, ct);
+
+            if (game.Status != GameStatus.Setup)
+                throw new InvalidOperationException("You can only add players while the game is in Setup.");
+            if (!game.IsSignupOpen)
+                throw new InvalidOperationException("Signups are currently closed for this game.");
+
+            // Enforce hendrix.edu
+            if (!norm.EndsWith("@hendrix.edu"))
+                throw new InvalidOperationException("Only email addresses ending in @hendrix.edu can join.");
+
+            var existsEmail = await _db.Players.AnyAsync(p => p.GameId == gameId && p.EmailNormalized == norm, ct);
+            if (existsEmail) throw new InvalidOperationException("A player with this email already exists in this game.");
+
+            var existsAlias = await _db.Players.AnyAsync(p => p.GameId == gameId && p.Alias == alias, ct);
+            if (existsAlias) throw new InvalidOperationException("That alias is already taken in this game. Choose another.");
+
+            var passcode = Passcode.Generate();
+            var (hash, salt, algo, cost) = Passcode.Hash(passcode);
+
+            var p = new Player
             {
-                Name = name.Trim(),
-                Status = GameStatus.Setup,
-                IsSignupOpen = true,
-                IsPaused = false
+                GameId = gameId,
+                Email = email,
+                EmailNormalized = norm,
+                DisplayName = alias,
+                RealName = realName,
+                Alias = alias,
+                HairColor = hairColor,
+                EyeColor = eyeColor,
+                VisibleMarkings = visibleMarkings,
+                ApproximateAge = approximateAge,
+                Specialty = specialty,
+                IsActive = true,
+                Points = 0,
+                TargetEmail = null,
+                PhotoUrl = photoUrl,
+                PhotoContentType = contentType,
+                PhotoBytesSha256 = photoSha256,
+                PasscodeHash = hash,
+                PasscodeSalt = salt,
+                PasscodeAlgo = algo,
+                PasscodeCost = cost,
+                PasscodeSetAt = DateTimeOffset.UtcNow,
+                PasscodePlaintext = passcode
             };
 
-            _db.Games.Add(g);
-            await _db.SaveChangesAsync();
-            return g;
+            _db.Players.Add(p);
+            await _db.SaveChangesAsync(ct);
+            return (p, passcode);
         }
 
-        // ------------------------------------------------------------------
-        // Start game: assign ring and activate verified players.
-        // Ensures all verified players have valid passcodes.
-        // Sends each player a "Your Target" email (no victim passcode/email/real name).
-        // ------------------------------------------------------------------
-        public async Task StartGameAsync(int gameId)
+        // -------------------------
+        // Start: single random ring (no 2-cycles)
+        // -------------------------
+        public async Task StartGameAsync(int gameId, CancellationToken ct = default)
         {
-            var game = await _db.Games.FirstOrDefaultAsync(g => g.Id == gameId);
-            if (game is null) throw new InvalidOperationException("Game not found.");
+            using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var game = await _db.Games
+                .Include(g => g.Players.Where(p => p.IsActive))
+                .SingleAsync(g => g.Id == gameId, ct);
+
             if (game.Status != GameStatus.Setup)
-                throw new InvalidOperationException("Game is not in Setup state.");
+                throw new InvalidOperationException("Game is not in Setup.");
 
-            var players = await _db.Players
-                .Where(p => p.GameId == gameId && p.IsEmailVerified)
-                .OrderBy(p => p.DisplayName)
-                .ToListAsync();
-
+            var players = game.Players.OrderBy(_ => Guid.NewGuid()).ToList();
             if (players.Count < 2)
-                _log.LogWarning("Starting game {GameId} with fewer than 2 verified players.", gameId);
+                throw new InvalidOperationException("Need at least 2 active players to start.");
 
-            foreach (var p in players)
-            {
-                EnsurePlayerPasscode(p);
-                p.IsActive = true;
-            }
+            AssignSingleCycle(players);
+            ValidateSingleCycle(players);
 
-            // Ring assignment
-            if (players.Count >= 2)
-            {
-                for (int i = 0; i < players.Count; i++)
-                {
-                    var curr = players[i];
-                    var next = players[(i + 1) % players.Count];
-                    curr.TargetEmail = next.Email;
-                }
-            }
-            else if (players.Count == 1)
-            {
-                players[0].TargetEmail = null;
-            }
-
-            game.Status = GameStatus.Active;
-            game.IsPaused = false;
             game.IsSignupOpen = false;
+            game.Status = GameStatus.Active;
             game.StartedAt = DateTimeOffset.UtcNow;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
 
-            // Notify each verified/active player of their target + their own passcode
-            foreach (var p in players)
+            // ✅ Send "assignment" email to each player
+            await SendAssignmentEmailsAsync(game, players, ct);
+        }
+
+        private async Task SendAssignmentEmailsAsync(Game game, List<Player> players, CancellationToken ct)
+        {
+            var byEmail = players.ToDictionary(p => p.Email, p => p);
+
+            foreach (var me in players)
             {
+                Player? target = null;
+                if (!string.IsNullOrWhiteSpace(me.TargetEmail))
+                    byEmail.TryGetValue(me.TargetEmail, out target);
+
+                var email = AssignmentEmailBuilder.Build(game, me, target, "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net");
+
                 try
                 {
-                    await SendTargetEmailAsync(game, p);
+                    await _emailSender.SendAsync(me.Email, email.Subject, email.HtmlBody, ct);
                 }
                 catch (Exception ex)
                 {
-                    _log.LogError(ex, "Failed to send target email to {Email} (Game {GameId})", p.Email, gameId);
+                    Console.WriteLine($"[Email Error] Could not send to {me.Email}: {ex.Message}");
                 }
             }
         }
 
-        // ------------------------------------------------------------------
-        // Report elimination (used by Players' report page).
-        // Uses 4-arg Passcode.Verify(plaintext, hash, salt, iterations).
-        // ------------------------------------------------------------------
+        private static void AssignSingleCycle(List<Player> players)
+        {
+            int n = players.Count;
+            for (int i = 0; i < n; i++)
+                players[i].TargetEmail = players[(i + 1) % n].Email;
+        }
+
+        private static void ValidateSingleCycle(ICollection<Player> players)
+        {
+            var active = players.Where(p => p.IsActive).ToList();
+            int n = active.Count;
+            if (n < 2) return;
+
+            var map = active.ToDictionary(p => p.Email, p => p.TargetEmail);
+
+            foreach (var p in active)
+            {
+                if (map[p.Email] is null) throw new InvalidOperationException("Every active player must have a target.");
+                if (map[p.Email] == p.Email) throw new InvalidOperationException("No player may target themselves.");
+            }
+
+            var start = active[0].Email;
+            var visited = new HashSet<string>(capacity: n);
+            var cur = start;
+            for (int steps = 0; steps < n; steps++)
+            {
+                if (!visited.Add(cur)) break;
+                cur = map[cur]!;
+            }
+            if (cur != start || visited.Count != n)
+                throw new InvalidOperationException("Target assignment must form a single ring. Try starting again.");
+        }
+
+        // -------------------------
+        // Report elimination (requires both passcodes)
+        // -------------------------
         public async Task ReportEliminationAsync(
             int gameId,
-            string eliminatorAlias,
-            string victimAlias,
-            string eliminatorPasscode,
-            string victimPasscode)
+            string eliminatorEmail,
+            string victimEmail,
+            string providedVictimPasscode,
+            string providedEliminatorPasscode,
+            CancellationToken ct = default)
         {
-            var game = await _db.Games.FirstOrDefaultAsync(g => g.Id == gameId);
-            if (game is null) throw new InvalidOperationException("Game not found.");
-            if (game.Status != GameStatus.Active) throw new InvalidOperationException("Game is not active.");
-            if (game.IsPaused) throw new InvalidOperationException("Game is paused.");
+            using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            eliminatorAlias = (eliminatorAlias ?? string.Empty).Trim();
-            victimAlias     = (victimAlias     ?? string.Empty).Trim();
+            var game = await _db.Games.Include(g => g.Players).SingleAsync(g => g.Id == gameId, ct);
+            if (game.Status != GameStatus.Active)
+                throw new InvalidOperationException("Game is not active.");
 
-            var players = await _db.Players
-                .Where(p => p.GameId == gameId)
-                .ToListAsync();
+            if (game.IsPaused)
+                throw new InvalidOperationException("Game is paused. Eliminations are temporarily disabled.");
 
-            var eliminator = FindPlayerByAnyId(players, eliminatorAlias);
-            var victim     = FindPlayerByAnyId(players, victimAlias);
+            var eliminator = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == eliminatorEmail, ct);
+            var victim = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == victimEmail, ct);
 
-            if (eliminator is null || victim is null)
-                throw new InvalidOperationException("Could not find eliminator or victim.");
+            if (!eliminator.IsActive || !victim.IsActive)
+                throw new InvalidOperationException("Inactive eliminator or victim.");
+            if (eliminator.TargetEmail != victim.Email)
+                throw new InvalidOperationException("Victim is not the eliminator's current target.");
 
-            if (!eliminator.IsActive)
-                throw new InvalidOperationException("Eliminator is not active.");
+            var okElim = await VerifyOrRepairPasscodeAsync(eliminator, providedEliminatorPasscode, ct);
+            if (!okElim) throw new InvalidOperationException("Your passcode is incorrect.");
+            var okVictim = await VerifyOrRepairPasscodeAsync(victim, providedVictimPasscode, ct);
+            if (!okVictim) throw new InvalidOperationException("Victim passcode is incorrect.");
 
-            if (!victim.IsActive)
-                throw new InvalidOperationException("Victim is already eliminated.");
+            var awarded = victim.Points + 1;
+            eliminator.Points += awarded;
 
-            // Must match the ring (eliminator -> victim)
-            if (!string.Equals(eliminator.TargetEmail, victim.Email, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Selected victim is not your assigned target.");
+            var victimsTargetEmail = victim.TargetEmail;
+            victim.IsActive = false;
+            victim.TargetEmail = null;
 
-            // Ensure passcodes exist (paranoia)
-            if (string.IsNullOrWhiteSpace(eliminator.PasscodePlaintext))
-                EnsurePlayerPasscode(eliminator);
-            if (string.IsNullOrWhiteSpace(victim.PasscodePlaintext))
-                EnsurePlayerPasscode(victim);
+            var stillActive = game.Players.Count(p => p.IsActive);
+            if (stillActive > 1)
+                eliminator.TargetEmail = (victimsTargetEmail == eliminator.Email) ? null : victimsTargetEmail;
 
-            // --- Normalize passcodes (trim whitespace/newlines, force uppercase) ---
-            string normElim = (eliminatorPasscode ?? string.Empty)
-                .Trim()
-                .Replace("\r", "")
-                .Replace("\n", "")
-                .ToUpperInvariant();
-
-            string normVictim = (victimPasscode ?? string.Empty)
-                .Trim()
-                .Replace("\r", "")
-                .Replace("\n", "")
-                .ToUpperInvariant();
-
-            // Verify with iterations (cost)
-            if (!Passcode.Verify(normElim, eliminator.PasscodeHash!, eliminator.PasscodeSalt!, eliminator.PasscodeCost))
-                throw new InvalidOperationException("Your passcode is incorrect.");
-
-            if (!Passcode.Verify(normVictim, victim.PasscodeHash!, victim.PasscodeSalt!, victim.PasscodeCost))
-                throw new InvalidOperationException("Victim’s passcode is incorrect.");
-
-            // Record elimination
-            var elim = new Elimination
+            _db.Eliminations.Add(new Elimination
             {
                 GameId = gameId,
-                EliminatorEmail = eliminator.Email,
                 EliminatorGameId = gameId,
-                VictimEmail = victim.Email,
+                EliminatorEmail = eliminatorEmail,
                 VictimGameId = gameId,
+                VictimEmail = victimEmail,
                 OccurredAt = DateTimeOffset.UtcNow,
+                PointsAwarded = awarded,
                 PasscodeVerified = true,
-                PointsAwarded = 1
-            };
-            _db.Eliminations.Add(elim);
+                VerifiedAt = DateTimeOffset.UtcNow
+            });
 
-            // Award + rewire
-            eliminator.Points += 1;
-            victim.IsActive = false;
+            if (game.Players.Count(p => p.IsActive) == 1)
+            {
+                game.Status = GameStatus.Completed;
+                game.EndedAt = DateTimeOffset.UtcNow;
+            }
 
-            eliminator.TargetEmail = string.IsNullOrEmpty(victim.TargetEmail)
-                ? null
-                : victim.TargetEmail;
-
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
 
-        // ------------------------------------------------------------------
-        // Admin add player (OVERLOAD that matches a caller without displayName).
-        // Returns (player, passcodePlaintext). DisplayName defaults to alias.
-        // ------------------------------------------------------------------
-        public async Task<(Player player, string passcode)> AddPlayerAdminAsync(
-            int gameId,
-            string email,
-            string alias,
-            string realName,
-            int? approximateAge,
-            string? hairColor,
-            string? eyeColor,
-            string? visibleMarkings,
-            string? specialty,
-            string? photoUrl = null,
-            string? contentType = null,
-            byte[]? photoSha256 = null)
+        private async Task<bool> VerifyOrRepairPasscodeAsync(Player p, string provided, CancellationToken ct)
         {
-            return await AddPlayerAdminAsync(
-                gameId, email, alias, realName, displayName: alias,
-                approximateAge, hairColor, eyeColor, visibleMarkings, specialty,
-                photoUrl, contentType, photoSha256);
+            static bool NeedsRepair(Player x) =>
+                x.PasscodeHash == null || x.PasscodeHash.Length == 0 ||
+                x.PasscodeSalt == null || x.PasscodeSalt.Length == 0 ||
+                x.PasscodeCost <= 0;
+
+            if (!NeedsRepair(p))
+                return Passcode.Verify(provided, p.PasscodeSalt, p.PasscodeHash, p.PasscodeCost);
+
+            if (!string.IsNullOrWhiteSpace(p.PasscodePlaintext) &&
+                string.Equals(provided, p.PasscodePlaintext, StringComparison.Ordinal))
+            {
+                var (hash, salt, algo, cost) = Passcode.Hash(provided);
+                p.PasscodeHash = hash;
+                p.PasscodeSalt = salt;
+                p.PasscodeAlgo = algo;
+                p.PasscodeCost = cost;
+                p.PasscodeSetAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+                return true;
+            }
+
+            return false;
         }
 
-        // Canonical/admin add with explicit displayName
-        public async Task<(Player player, string passcode)> AddPlayerAdminAsync(
-            int gameId,
-            string email,
-            string alias,
-            string realName,
-            string? displayName,
-            int? approximateAge,
-            string? hairColor,
-            string? eyeColor,
-            string? visibleMarkings,
-            string? specialty,
-            string? photoUrl = null,
-            string? contentType = null,
-            byte[]? photoSha256 = null)
+        // -------------------------
+        // Admin Remove
+        // -------------------------
+        public async Task RemovePlayerAsync(int gameId, string email, CancellationToken ct = default)
         {
-            var emailNorm = (email ?? string.Empty).Trim().ToUpperInvariant();
+            using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            var p = await _db.Players
-                .FirstOrDefaultAsync(x => x.GameId == gameId && x.EmailNormalized == emailNorm);
+            var game = await _db.Games.Include(g => g.Players).SingleAsync(g => g.Id == gameId, ct);
+            var player = await _db.Players.SingleOrDefaultAsync(p => p.GameId == gameId && p.Email == email, ct);
+            if (player is null) throw new InvalidOperationException("Player not found.");
 
-            if (p == null)
+            if (game.Status == GameStatus.Completed)
+                throw new InvalidOperationException("Cannot remove players from a completed game.");
+
+            if (game.Status == GameStatus.Setup)
             {
-                p = new Player
-                {
-                    GameId = gameId,
-                    Email = email.Trim(),
-                    EmailNormalized = emailNorm,
-                    Alias = alias?.Trim() ?? string.Empty,
-                    RealName = realName?.Trim() ?? string.Empty,
-                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? (alias?.Trim() ?? string.Empty) : displayName!.Trim(),
-                    ApproximateAge = approximateAge,
-                    HairColor = hairColor?.Trim(),
-                    EyeColor = eyeColor?.Trim(),
-                    VisibleMarkings = visibleMarkings?.Trim(),
-                    Specialty = specialty?.Trim(),
-                    IsActive = false,
-                    IsEmailVerified = true, // admin-added => treat as verified
-                    Points = 0,
-                    PhotoUrl = photoUrl,
-                    PhotoContentType = contentType,
-                    PhotoBytesSha256 = photoSha256
-                };
-                _db.Players.Add(p);
-            }
-            else
-            {
-                p.Alias = alias?.Trim() ?? p.Alias;
-                p.RealName = realName?.Trim() ?? p.RealName;
-                p.DisplayName = string.IsNullOrWhiteSpace(displayName) ? p.DisplayName : displayName!.Trim();
-                p.ApproximateAge = approximateAge;
-                p.HairColor = hairColor?.Trim();
-                p.EyeColor = eyeColor?.Trim();
-                p.VisibleMarkings = visibleMarkings?.Trim();
-                p.Specialty = specialty?.Trim();
-                if (!string.IsNullOrWhiteSpace(photoUrl)) p.PhotoUrl = photoUrl;
-                if (!string.IsNullOrWhiteSpace(contentType)) p.PhotoContentType = contentType;
-                if (photoSha256 is not null && photoSha256.Length > 0) p.PhotoBytesSha256 = photoSha256;
+                _db.Players.Remove(player);
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return;
             }
 
-            EnsurePlayerPasscode(p);
-            await _db.SaveChangesAsync();
-            return (p, p.PasscodePlaintext!);
-        }
-
-        // ------------------------------------------------------------------
-        // Admin remove (soft remove and ring rewire if necessary).
-        // ------------------------------------------------------------------
-        public async Task RemovePlayerAsync(int gameId, string email)
-        {
-            var emailNorm = (email ?? string.Empty).Trim().ToUpperInvariant();
-
-            var p = await _db.Players
-                .FirstOrDefaultAsync(x => x.GameId == gameId && x.EmailNormalized == emailNorm);
-
-            if (p == null) return;
-
-            if (p.IsActive)
+            if (!player.IsActive)
             {
-                var players = await _db.Players.Where(x => x.GameId == gameId && x.IsActive).ToListAsync();
-
-                var prev = players.FirstOrDefault(x =>
-                    string.Equals(x.TargetEmail, p.Email, StringComparison.OrdinalIgnoreCase));
-                var nextEmail = p.TargetEmail;
-
-                if (prev != null) prev.TargetEmail = nextEmail;
-
-                p.IsActive = false;
-                p.TargetEmail = null;
+                await tx.CommitAsync(ct);
+                return;
             }
 
-            await _db.SaveChangesAsync();
-        }
+            var hunter = await _db.Players.SingleOrDefaultAsync(
+                h => h.GameId == gameId && h.IsActive && h.TargetEmail == player.Email, ct);
 
-        // ------------------------------------------------------------------
-        // Helpers
-        // ------------------------------------------------------------------
+            var victimsTargetEmail = player.TargetEmail;
 
-        // Accepts Alias OR DisplayName OR Email, and also tolerates "alias : email".
-        private static Player? FindPlayerByAnyId(IEnumerable<Player> players, string value)
-        {
-            var v = (value ?? string.Empty).Trim();
+            player.IsActive = false;
+            player.TargetEmail = null;
 
-            // If a UI ever posts "alias : email", take just the alias part so lookups still work.
-            var core = v;
-            var colon = v.IndexOf(':');
-            if (colon >= 0)
+            if (hunter is not null)
+                hunter.TargetEmail = (victimsTargetEmail == hunter.Email) ? null : victimsTargetEmail;
+
+            if (game.Players.Count(p => p.IsActive) == 1)
             {
-                core = v.Substring(0, colon).Trim();
+                game.Status = GameStatus.Completed;
+                game.EndedAt = DateTimeOffset.UtcNow;
             }
 
-            return players.FirstOrDefault(p =>
-                string.Equals(p.Alias ?? string.Empty, v,    StringComparison.OrdinalIgnoreCase)
-                || string.Equals(p.Alias ?? string.Empty, core, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(p.DisplayName ?? string.Empty, v,    StringComparison.OrdinalIgnoreCase)
-                || string.Equals(p.DisplayName ?? string.Empty, core, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(p.Email ?? string.Empty, v,    StringComparison.OrdinalIgnoreCase));
-        }
-
-        // Email helper: "Your Target" (no victim passcode/email/real name).
-        private async Task SendTargetEmailAsync(Game game, Player player)
-        {
-            string gameName = game?.Name ?? $"Game #{player.GameId}";
-            var subject = $"{gameName} — Your Target";
-
-            Player? target = null;
-            if (!string.IsNullOrWhiteSpace(player.TargetEmail))
-            {
-                var norm = player.TargetEmail.Trim().ToUpperInvariant();
-                target = await _db.Players
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(p => p.GameId == player.GameId &&
-                                              p.EmailNormalized == norm);
-            }
-
-            // Plaintext
-            var sbText = new StringBuilder()
-                .AppendLine($"The game \"{gameName}\" has started.")
-                .AppendLine()
-                .AppendLine("Your passcode (keep this secret):")
-                .AppendLine(player.PasscodePlaintext ?? "(not set)")
-                .AppendLine();
-
-            if (target == null)
-            {
-                sbText.AppendLine("You currently have no target assigned.");
-            }
-            else
-            {
-                sbText
-                    .AppendLine("Your current target:")
-                    .AppendLine($"  Alias: {target.Alias}")
-                    .AppendLine($"  Display Name: {target.DisplayName}")
-                    .AppendLine()
-                    .AppendLine("Do not share this email.");
-            }
-
-            // Lightweight HTML
-            string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
-
-            var html = new StringBuilder()
-                .AppendLine($"<h3>The game \"{H(gameName)}\" has started.</h3>")
-                .AppendLine("<p><strong>Your passcode</strong> (keep this secret):</p>")
-                .AppendLine($"<p><code>{H(player.PasscodePlaintext)}</code></p>");
-
-            if (target == null)
-            {
-                html.AppendLine("<p>You currently have no target assigned.</p>");
-            }
-            else
-            {
-                html.AppendLine("<p><strong>Your current target:</strong></p>")
-                    .AppendLine("<ul>")
-                    .AppendLine($"  <li>Alias: {H(target.Alias)}</li>")
-                    .AppendLine($"  <li>Display Name: {H(target.DisplayName)}</li>")
-                    .AppendLine("</ul>");
-
-                if (!string.IsNullOrWhiteSpace(target.PhotoUrl))
-                {
-                    var photoUrl = target.PhotoUrl!;
-                    html.AppendLine($"<p><img src=\"{H(photoUrl)}\" alt=\"Target photo\" style=\"max-width:320px;height:auto;border:1px solid #ddd;border-radius:8px\" /></p>");
-                }
-            }
-
-            var combined = new StringBuilder()
-                .AppendLine(sbText.ToString())
-                .AppendLine()
-                .AppendLine("-----")
-                .AppendLine("(If your mail client supports HTML, details appear below.)")
-                .AppendLine("-----")
-                .AppendLine()
-                .AppendLine(html.ToString())
-                .ToString();
-
-            await _email.SendAsync(player.Email, subject, combined);
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
         }
     }
 }
