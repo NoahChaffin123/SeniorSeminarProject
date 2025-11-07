@@ -32,11 +32,14 @@ namespace AssassinsProject.Pages.Signup
         [BindProperty(SupportsGet = true)]
         public string? Token { get; set; }
 
-        // What the .cshtml expects
+        // What the .cshtml expects (used only when we actually render this page)
         public bool Verified { get; set; }
         public string? Message { get; set; }
 
         public Game? Game { get; set; }
+
+        private IActionResult RedirectToSuccess(string email) =>
+            RedirectToPage("/Signup/Sent", new { gameId = GameId, email });
 
         public async Task<IActionResult> OnGetAsync(CancellationToken ct = default)
         {
@@ -60,13 +63,9 @@ namespace AssassinsProject.Pages.Signup
                 return Page();
             }
 
-            // Already verified -> show success (but don't email again)
+            // ✅ Already verified -> send them to the same success page used for fresh verifications
             if (player.IsEmailVerified)
-            {
-                Verified = true;
-                Message = "You're already verified and in the game. See you on the field!";
-                return Page();
-            }
+                return RedirectToSuccess(player.Email);
 
             // Require a matching (latest) token
             if (string.IsNullOrWhiteSpace(Token) || string.IsNullOrWhiteSpace(player.VerificationToken))
@@ -105,25 +104,23 @@ namespace AssassinsProject.Pages.Signup
 
             await _db.SaveChangesAsync(ct);
 
-            // Fire-and-forget a simple confirmation email
+            // Fire-and-forget a simple confirmation email (non-blocking)
             try
             {
                 var subject = $"{Game.Name} – Email Verified";
                 var html = $@"
-<p>If you received this email, this means you are verified. <strong>{Game.Name}</strong>.</p>
-<p>Please note that the game has not yet started</p>
-<p><em>You will receive your passocde in an email once the game starts. Good luck!</em></p>";
-
+<p>If you received this email, this means you are verified for <strong>{Game.Name}</strong>.</p>
+<p>Please note that the game has not yet started.</p>
+<p><em>You will receive your passcode in an email once the game starts. Good luck!</em></p>";
                 await _emailSender.SendAsync(player.Email, subject, html, ct);
             }
-            catch (Exception)
+            catch
             {
-                // Don't block the page if email fails; verification already succeeded.
+                // Don’t block the flow if email fails; verification already succeeded.
             }
 
-            Verified = true;
-            Message = "Your email is verified! You're in.";
-            return Page();
+            // ✅ Always land on the same success page
+            return RedirectToSuccess(player.Email);
         }
     }
 }
