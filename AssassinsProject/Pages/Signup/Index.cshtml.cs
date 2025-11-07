@@ -92,7 +92,7 @@ namespace AssassinsProject.Pages.Signup
             }
             if (uploaded is null || uploaded.Length == 0)
             {
-                ModelState.AddModelError(nameof(Photo), "Please choose a player photo.");
+                ModelState.AddModelError(nameof(Photo), "A picture is required");
             }
 
             if (string.IsNullOrWhiteSpace(DisplayName))
@@ -161,8 +161,8 @@ namespace AssassinsProject.Pages.Signup
             // Save REQUIRED photo (now with a proper null guard)
             if (uploaded is null)
             {
-                // This should be unreachable due to the earlier validation, but guard anyway.
-                ModelState.AddModelError(nameof(Photo), "Please choose a player photo.");
+                // Should be unreachable due to earlier validation, but guard anyway.
+                ModelState.AddModelError(nameof(Photo), "A picture is required");
                 Game = game;
                 return Page();
             }

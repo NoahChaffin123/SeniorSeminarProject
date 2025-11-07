@@ -657,6 +657,10 @@
       "PackagePath": "staticwebassets\\uploads\\players\\42\\noahclaychaffin-yahoo.com.png"
     },
     {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\43\\noahchaffin2003-outlook.com.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\43\\noahchaffin2003-outlook.com.png"
+    },
+    {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.AssassinsProject.Microsoft.AspNetCore.StaticWebAssets.props",
       "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
     },

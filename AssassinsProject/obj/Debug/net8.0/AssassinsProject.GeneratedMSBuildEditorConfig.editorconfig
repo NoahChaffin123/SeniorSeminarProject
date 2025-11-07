@@ -18,10 +18,6 @@ build_property.GenerateRazorMetadataSourceChecksumAttributes = true
 build_property.MSBuildProjectDirectory = c:\Users\noahc\OneDrive\Desktop\FallSemester2026\Senior Seminar\SeniorSeminarProject\AssassinsProject
 build_property._RazorSourceGeneratorDebug = 
 
-[c:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/AssassinsProject/Pages/Auth/VerifyEmail.cshtml]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxWZXJpZnlFbWFpbC5jc2h0bWw=
-build_metadata.AdditionalFiles.CssScope = 
-
 [c:/Users/noahc/OneDrive/Desktop/FallSemester2026/Senior Seminar/SeniorSeminarProject/AssassinsProject/Pages/Eliminations/Report.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRWxpbWluYXRpb25zXFJlcG9ydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
