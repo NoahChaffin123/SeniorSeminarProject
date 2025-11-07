@@ -27,7 +27,7 @@ public class DetailsModel : PageModel
     public List<Player> AllPlayers { get; set; } = new();
     public List<Player> ActivePlayers { get; set; } = new();
 
-    // Scoreboard (active first, then points desc)
+    // Scoreboard
     public List<Player> ScoreboardPlayers { get; set; } = new();
 
     // Fast lookup for rendering "A -> B"
@@ -40,6 +40,21 @@ public class DetailsModel : PageModel
     // Share links
     public string? SignupUrl { get; set; }
     public string? ReportUrl { get; set; }
+
+    /// <summary>
+    /// Status string for the scoreboard row, varying by game phase.
+    /// </summary>
+    public string StatusFor(Player p)
+    {
+        var g = Game!;
+        return g.Status switch
+        {
+            GameStatus.Setup     => p.IsEmailVerified ? "Verified" : "Unverified",
+            GameStatus.Active    => p.IsActive        ? "Active"    : "Eliminated",
+            GameStatus.Completed => p.IsActive        ? "Winner"   : "Eliminated",
+            _                    => p.IsActive        ? "Active"    : "Eliminated"
+        };
+    }
 
     public async Task<IActionResult> OnGetAsync(int id)
     {
@@ -63,11 +78,24 @@ public class DetailsModel : PageModel
             .OrderByDescending(e => e.OccurredAt)
             .ToListAsync();
 
-        ScoreboardPlayers = AllPlayers
-            .OrderByDescending(p => p.IsActive)
-            .ThenByDescending(p => p.Points)
-            .ThenBy(p => p.DisplayName)
-            .ToList();
+        // Scoreboard ordering:
+        //   - During Setup: Verified first, then name
+        //   - Otherwise: Active first, then points desc, then name
+        if (Game.Status == GameStatus.Setup)
+        {
+            ScoreboardPlayers = AllPlayers
+                .OrderByDescending(p => p.IsEmailVerified)
+                .ThenBy(p => p.DisplayName)
+                .ToList();
+        }
+        else
+        {
+            ScoreboardPlayers = AllPlayers
+                .OrderByDescending(p => p.IsActive)
+                .ThenByDescending(p => p.Points)
+                .ThenBy(p => p.DisplayName)
+                .ToList();
+        }
 
         SignupUrl = Url.Page(
             pageName: "/Signup/Index",

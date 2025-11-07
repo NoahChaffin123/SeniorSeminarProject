@@ -191,7 +191,7 @@ else
                     </div>
                 </td>
                 <td>@p.Points</td>
-                <td>@(p.IsActive ? "Active" : "Eliminated")</td>
+                <td>@Model.StatusFor(p)</td>
                 <td class="text-nowrap">
                     <a class="btn btn-sm btn-outline-secondary"
                        asp-page="/Players/Edit"
@@ -233,7 +233,7 @@ else
 
 @section Scripts {
 <script>
-  // One-tap copy 
+  // One-tap copy
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('[data-copy-target]');
     if (!btn) return;
