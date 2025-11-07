@@ -76,10 +76,7 @@ namespace AssassinsProject.Pages.Signup
                 ModelState.AddModelError(string.Empty, "Signups are closed.");
             }
 
-            // --- Domain restriction (left disabled per your comment) ---
             var emailTrimmed = (Email ?? string.Empty).Trim();
-            // if (!emailTrimmed.EndsWith("@hendrix.edu", StringComparison.OrdinalIgnoreCase))
-            //     ModelState.AddModelError(nameof(Email), "Use your @hendrix.edu email address.");
 
             // --- Robustly capture the uploaded file (required) ---
             IFormFile? uploaded = Photo;
@@ -119,19 +116,48 @@ namespace AssassinsProject.Pages.Signup
             // Normalize email consistently
             var emailNorm = EmailNormalizer.Normalize(emailTrimmed);
 
-            // Reject duplicates up-front (verified OR unverified)
-            var exists = await _db.Players
-                .AsNoTracking()
-                .AnyAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
+            // ---------- Smart duplicate handling ----------
+            var existing = await _db.Players
+                .SingleOrDefaultAsync(p => p.GameId == GameId && p.EmailNormalized == emailNorm, ct);
 
-            if (exists)
+            if (existing is not null)
             {
-                ModelState.AddModelError(nameof(Email),
-                    "This email is already registered for this game. " +
-                    "If you need a verification link, check your inbox/spam or contact the organizer.");
-                Game = game;
-                return Page();
+                if (!existing.IsEmailVerified)
+                {
+                    // Re-issue a fresh token and re-send the verification mail
+                    existing.VerificationToken = Guid.NewGuid().ToString("N");
+                    existing.VerificationSentAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+
+                    var verifyUrlExisting = Url.Page(
+                        pageName: "/Signup/Verify",
+                        pageHandler: null,
+                        values: new { gameId = GameId, email = existing.Email, token = existing.VerificationToken },
+                        protocol: Request.Scheme,
+                        host: Request.Host.ToString()
+                    ) ?? string.Empty;
+
+                    var subjectExisting = $"{game.Name} Verification Email";
+                    var bodyExisting =
+$@"<p>Thanks for signing up for <strong>{game.Name}</strong>!</p>
+<p>Please verify your email to join the game:</p>
+<p><a href=""{verifyUrlExisting}"">{verifyUrlExisting}</a></p>
+<p>If you didn’t request this, you can ignore this email.</p>
+
+----
+Plain-text fallback:
+{verifyUrlExisting}";
+
+                    await _email.SendAsync(existing.Email, subjectExisting, bodyExisting);
+
+                    TempData["Message"] = "Check your email for a verification link.";
+                    return RedirectToPage("/Signup/Sent", new { gameId = GameId, email = existing.Email });
+                }
+
+                // Already verified → show the Verify page’s “already verified” message
+                return RedirectToPage("/Signup/Verify", new { gameId = GameId, email = existing.Email, token = "ok" });
             }
+            // ---------- END duplicate handling ----------
 
             // Create the new (unverified) player
             var player = new Player
@@ -158,10 +184,9 @@ namespace AssassinsProject.Pages.Signup
             };
             _db.Players.Add(player);
 
-            // Save REQUIRED photo (now with a proper null guard)
+            // Save REQUIRED photo (guard again)
             if (uploaded is null)
             {
-                // Should be unreachable due to earlier validation, but guard anyway.
                 ModelState.AddModelError(nameof(Photo), "A picture is required");
                 Game = game;
                 return Page();
@@ -189,10 +214,7 @@ namespace AssassinsProject.Pages.Signup
                 host: Request.Host.ToString()
             ) ?? string.Empty;
 
-            // Subject includes the game name
             var subject = $"{game.Name} Verification Email";
-
-            // HTML body with clickable link + plain text fallback
             var body =
 $@"<p>Thanks for signing up for <strong>{game.Name}</strong>!</p>
 <p>Please verify your email to join the game:</p>

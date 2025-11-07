@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AssassinsProject")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a58d991c7663c38b9467480e8abcefbfc6d82e2a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e3d87368e654232097f9032032ede1cbb323f599")]
 [assembly: System.Reflection.AssemblyProductAttribute("AssassinsProject")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AssassinsProject")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
