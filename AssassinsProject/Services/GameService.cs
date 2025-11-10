@@ -385,6 +385,37 @@ namespace AssassinsProject.Services
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // NEW: if the game is active and the hunter got a real new target, email them
+            if (game.Status == GameStatus.Active && hunter is not null && hunter.IsActive && !string.IsNullOrWhiteSpace(hunter.TargetEmail))
+            {
+                var nextTarget = game.Players.FirstOrDefault(p => p.Email == hunter.TargetEmail);
+                await SendReassignmentEmailAsync(game, hunter, nextTarget, ct);
+            }
+        }
+
+        // -------------------------
+        // Helper: email hunter after admin removal (reassignment)
+        // -------------------------
+        private async Task SendReassignmentEmailAsync(Game game, Player hunter, Player? nextTarget, CancellationToken ct)
+        {
+            var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                          ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+            // Reuse the exact assignment template (so body matches “game started” emails)
+            var email = AssignmentEmailBuilder.Build(game, hunter, nextTarget, baseUrl);
+
+            // Override subject per request
+            var subject = $"{game.Name} - New Target due to your Target being removed";
+
+            try
+            {
+                await _emailSender.SendAsync(hunter.Email, subject, email.HtmlBody, ct);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Email Error] Reassignment email failed for {hunter.Email}: {ex.Message}");
+            }
         }
 
         // -------------------------
