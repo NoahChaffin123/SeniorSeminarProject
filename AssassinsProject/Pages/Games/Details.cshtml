@@ -51,8 +51,8 @@
     @* Setup controls *@
     @if (g.Status == AssassinsProject.Models.GameStatus.Setup)
     {
-        <form method="post" asp-page-handler="Start" class="d-inline">
-            <button class="btn btn-success">Start Game</button>
+        <form method="post" asp-page-handler="Start" class="d-inline" data-submit-once>
+            <button class="btn btn-success submit-once" data-once-text="Starting Game...">Start Game</button>
         </form>
 
         @if (g.IsSignupOpen)
@@ -233,7 +233,7 @@ else
 
 @section Scripts {
 <script>
-  // One-tap copy
+  // Copy-to-clipboard flash
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('[data-copy-target]');
     if (!btn) return;
@@ -252,15 +252,22 @@ else
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(flash).catch(function () {
-        try {
-          el.focus(); el.select(); document.execCommand('copy'); flash();
-        } catch { /* ignore */ }
+        try { el.focus(); el.select(); document.execCommand('copy'); flash(); } catch {}
       });
     } else {
-      try {
-        el.focus(); el.select(); document.execCommand('copy'); flash();
-      } catch { /* ignore */ }
+      try { el.focus(); el.select(); document.execCommand('copy'); flash(); } catch {}
     }
   }, false);
+
+  document.querySelectorAll('form[data-submit-once]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      const btn = form.querySelector('.submit-once');
+      if (!btn) return;
+      const busy = btn.getAttribute('data-once-text') || 'Working...';
+      btn.dataset.originalText = btn.textContent;
+      btn.textContent = busy;
+      btn.disabled = true;
+    }, { once: true });
+  });
 </script>
 }
