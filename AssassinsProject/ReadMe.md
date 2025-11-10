@@ -124,15 +124,11 @@ Common Commands:
 | Build project          | `dotnet build`                    |
 | Publish for deployment | `dotnet publish -c Release`       |
 
-Future Plans
-
+### Future Plans
 The following features are planned for future development:
 
-Secure administrator login using Microsoft Entra ID (Azure AD).
-
-Role-based access control (restricting admin tools to verified users).
-
-In-game status dashboard for active players.
-
-Optional mobile-friendly interface.
+- Secure administator login using Microsoft Entra ID (Azure AD)
+- Role-based access control (restricting admin tools to verified users).
+- In-game status dashboard for active players
+- Optional Mobile-friendly interface.
 
