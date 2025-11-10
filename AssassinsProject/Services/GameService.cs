@@ -403,44 +403,66 @@ namespace AssassinsProject.Services
             var subject = $"Elimination Confirmation of {previousTargetName}";
 
             var tAlias = nextTarget?.Alias ?? "(no target assigned yet)";
-            var tDisplay = string.IsNullOrWhiteSpace(nextTarget?.DisplayName) ? nextTarget?.Alias : nextTarget?.DisplayName;
+            var tDisplay = string.IsNullOrWhiteSpace(nextTarget?.DisplayName)
+                ? nextTarget?.Alias
+                : nextTarget?.DisplayName;
 
             var details = new StringBuilder()
                 .AppendLine("<ul>")
                 .AppendLine($"  <li><strong>Alias:</strong> {H(tAlias)}</li>")
                 .AppendLine($"  <li><strong>Display Name:</strong> {H(tDisplay)}</li>");
 
+            string? absolutePhotoUrl = null;
+
             if (nextTarget is not null)
             {
-                if (nextTarget.ApproximateAge.HasValue) details.AppendLine($"  <li><strong>Approximate Age:</strong> {nextTarget.ApproximateAge.Value}</li>");
-                if (!string.IsNullOrWhiteSpace(nextTarget.HairColor)) details.AppendLine($"  <li><strong>Hair Color:</strong> {H(nextTarget.HairColor)}</li>");
-                if (!string.IsNullOrWhiteSpace(nextTarget.EyeColor)) details.AppendLine($"  <li><strong>Eye Color:</strong> {H(nextTarget.EyeColor)}</li>");
-                if (!string.IsNullOrWhiteSpace(nextTarget.VisibleMarkings)) details.AppendLine($"  <li><strong>Visible Markings:</strong> {H(nextTarget.VisibleMarkings)}</li>");
-                if (!string.IsNullOrWhiteSpace(nextTarget.Specialty)) details.AppendLine($"  <li><strong>Specialty:</strong> {H(nextTarget.Specialty)}</li>");
+                if (nextTarget.ApproximateAge.HasValue)
+                    details.AppendLine($"  <li><strong>Approximate Age:</strong> {nextTarget.ApproximateAge.Value}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.HairColor))
+                    details.AppendLine($"  <li><strong>Hair Color:</strong> {H(nextTarget.HairColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.EyeColor))
+                    details.AppendLine($"  <li><strong>Eye Color:</strong> {H(nextTarget.EyeColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.VisibleMarkings))
+                    details.AppendLine($"  <li><strong>Visible Markings:</strong> {H(nextTarget.VisibleMarkings)}</li>");
+                if (!string.IsNullOrWhiteSpace(nextTarget.Specialty))
+                    details.AppendLine($"  <li><strong>Specialty:</strong> {H(nextTarget.Specialty)}</li>");
 
                 // Photo link (if available)
                 if (!string.IsNullOrWhiteSpace(nextTarget.PhotoUrl))
                 {
-                    var photoUrl = nextTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                    absolutePhotoUrl = nextTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                         ? nextTarget.PhotoUrl!
                         : $"{baseUrl.TrimEnd('/')}/{nextTarget.PhotoUrl!.TrimStart('/')}";
 
-                    details.AppendLine($"  <li><strong>Photo:</strong> <a href=\"{H(photoUrl)}\">{H(photoUrl)}</a></li>");
+                    details.AppendLine($"  <li><strong>Photo URL:</strong> <a href=\"{H(absolutePhotoUrl)}\">{H(absolutePhotoUrl)}</a></li>");
                 }
             }
 
             details.AppendLine("</ul>");
 
-            var html = new StringBuilder()
+            // Build the final HTML
+            var htmlBuilder = new StringBuilder()
                 .AppendLine($"<h2>{H(gameName)} – Next Target</h2>")
                 .AppendLine($"<p>Your elimination of <strong>{H(previousTargetName)}</strong> is confirmed. Here is the information of your next target:</p>")
                 .AppendLine("<p><strong>Your passcode:</strong> " + H(me.PasscodePlaintext ?? "(not set)") + "</p>")
                 .AppendLine("<p><strong>Your current target:</strong></p>")
-                .AppendLine(details.ToString())
-                .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>")
-                .ToString();
+                .AppendLine(details.ToString());
 
-            return (subject, html);
+            // NEW: inline image goes right here, between the list and the bottom note
+            if (!string.IsNullOrWhiteSpace(absolutePhotoUrl))
+            {
+                htmlBuilder
+                    .AppendLine("<div style=\"margin:12px 0;\">")
+                    .AppendLine($"  <img src=\"{H(absolutePhotoUrl)}\" alt=\"Target photo\"")
+                    .AppendLine("       style=\"max-width:480px;width:100%;height:auto;border-radius:8px;border:1px solid #ddd;display:block;\" />")
+                    .AppendLine("</div>");
+            }
+
+            htmlBuilder
+                .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
+
+            return (subject, htmlBuilder.ToString());
         }
+
     }
 }
