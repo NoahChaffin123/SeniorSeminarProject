@@ -39,9 +39,8 @@ namespace AssassinsProject.Pages.Games
                     GameId = Id,
                     Email = Email,
                     EmailNormalized = normalized,
-                    DisplayName = Email,         // or set something nicer
+                    DisplayName = Email,        
                     Alias = string.Empty,
-                    // CRITICAL: do NOT activate now
                     IsActive = false,
                     IsEmailVerified = false
                 };
@@ -59,9 +58,6 @@ namespace AssassinsProject.Pages.Games
             player.VerificationSentAt = DateTimeOffset.UtcNow;
 
             await _db.SaveChangesAsync();
-
-            // TODO: Send your email with link to /Auth/VerifyEmail?gameId=...&email=...&token=...
-            // await _mailer.SendVerificationLinkAsync(Email, MakeVerifyUrl(Id, Email, player.VerificationToken));
 
             TempData["Flash"] = "We emailed you a verification link. Please verify to be added to the roster.";
             return RedirectToPage("/Games/Details", new { id = Id });

@@ -57,7 +57,7 @@ public class IndexModel : PageModel
             await _db.SaveChangesAsync();
         }
 
-        // 4) Now we can delete players safely
+        // 4) Delete players safely
         if (players.Count > 0)
         {
             _db.Players.RemoveRange(players);
