@@ -49,7 +49,7 @@ AssassinsProject/
 ├── Program.cs               # Application setup and middleware
 ├── appsettings.json         # Configuration (database, Azure email, etc.)
 └── README.md                # Project documentation
-
+```
 
 
 ---
