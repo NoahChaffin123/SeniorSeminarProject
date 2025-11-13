@@ -42,6 +42,7 @@ namespace AssassinsProject.Services
 
                 if (!string.IsNullOrWhiteSpace(target.PhotoUrl))
                 {
+                    // For photos, still respect the baseUrl coming from config
                     absolutePhotoUrl = target.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                         ? target.PhotoUrl!
                         : $"{baseUrl.TrimEnd('/')}/{target.PhotoUrl!.TrimStart('/')}";
@@ -53,7 +54,12 @@ namespace AssassinsProject.Services
 
             details.AppendLine("</ul>");
 
-            var reportUrl = $"{baseUrl.TrimEnd('/')}/Eliminations/Report?gameId={game.Id}";
+            // Always use the Azure base URL for the report-elimination link,
+            // regardless of what baseUrl was passed in.
+            const string azureBase =
+                "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+            var reportUrl        = $"{azureBase.TrimEnd('/')}/Eliminations/Report?gameId={game.Id}";
             var reportUrlEscaped = H(reportUrl);
 
             var htmlBuilder = new StringBuilder()
