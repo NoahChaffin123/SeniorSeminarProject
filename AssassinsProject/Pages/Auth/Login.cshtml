@@ -1,0 +1,28 @@
+@page
+@model AssassinsProject.Pages.Auth.LoginModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Admin Login";
+}
+
+<h1>Admin Login</h1>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+  <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+
+<form method="post" class="mt-3">
+  <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+
+  <div class="mb-3">
+    <label class="form-label">Admin Passcode</label>
+    <input name="Passcode" type="password" class="form-control" autocomplete="current-password" />
+  </div>
+
+  <button class="btn btn-primary" type="submit">Sign In</button>
+  @if (!string.IsNullOrWhiteSpace(Model.ReturnUrl))
+  {
+    <a class="btn btn-secondary ms-2" href="@Model.ReturnUrl">Cancel</a>
+  }
+</form>

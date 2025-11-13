@@ -11,11 +11,13 @@ public class DetailsModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly GameService _svc;
+    private readonly AdminGuard _guard;
 
-    public DetailsModel(AppDbContext db, GameService svc)
+    public DetailsModel(AppDbContext db, GameService svc, AdminGuard guard)
     {
         _db = db;
         _svc = svc;
+        _guard = guard;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -41,9 +43,6 @@ public class DetailsModel : PageModel
     public string? SignupUrl { get; set; }
     public string? ReportUrl { get; set; }
 
-    /// <summary>
-    /// Status string for the scoreboard row, varying by game phase.
-    /// </summary>
     public string StatusFor(Player p)
     {
         var g = Game!;
@@ -51,13 +50,19 @@ public class DetailsModel : PageModel
         {
             GameStatus.Setup     => p.IsEmailVerified ? "Verified" : "Unverified",
             GameStatus.Active    => p.IsActive        ? "Active"    : "Eliminated",
-            GameStatus.Completed => p.IsActive        ? "Winner"   : "Eliminated",
+            GameStatus.Completed => p.IsActive        ? "Winner"    : "Eliminated",
             _                    => p.IsActive        ? "Active"    : "Eliminated"
         };
     }
 
     public async Task<IActionResult> OnGetAsync(int id)
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         Id = id;
 
         Game = await _db.Games.FirstOrDefaultAsync(g => g.Id == id);
@@ -78,9 +83,6 @@ public class DetailsModel : PageModel
             .OrderByDescending(e => e.OccurredAt)
             .ToListAsync();
 
-        // Scoreboard ordering:
-        //   - During Setup: Verified first, then name
-        //   - Otherwise: Active first, then points desc, then name
         if (Game.Status == GameStatus.Setup)
         {
             ScoreboardPlayers = AllPlayers
@@ -116,9 +118,14 @@ public class DetailsModel : PageModel
         return Page();
     }
 
-    // Start game — GameService handles assignments + sending the one email.
     public async Task<IActionResult> OnPostStartAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         try
         {
             await _svc.StartGameAsync(Id);
@@ -131,9 +138,14 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // End game (set Completed, close signups, and stamp EndedAt)
     public async Task<IActionResult> OnPostEndAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         var g = await _db.Games.FirstOrDefaultAsync(x => x.Id == Id);
         if (g is null) return NotFound();
 
@@ -147,6 +159,12 @@ public class DetailsModel : PageModel
 
     public async Task<IActionResult> OnPostCloseSignupAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         Game? g = await _db.Games.FindAsync(Id);
         if (g is null) return NotFound();
         g.IsSignupOpen = false;
@@ -156,6 +174,12 @@ public class DetailsModel : PageModel
 
     public async Task<IActionResult> OnPostOpenSignupAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         Game? g = await _db.Games.FindAsync(Id);
         if (g is null) return NotFound();
         g.IsSignupOpen = true;
@@ -163,9 +187,14 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // Pause the game (only while Active)
     public async Task<IActionResult> OnPostPauseAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         var g = await _db.Games.FindAsync(Id);
         if (g is null) return NotFound();
         if (g.Status != GameStatus.Active) return BadRequest("Game is not active.");
@@ -175,9 +204,14 @@ public class DetailsModel : PageModel
         return await OnGetAsync(Id);
     }
 
-    // Unpause (resume) the game
     public async Task<IActionResult> OnPostUnpauseAsync()
     {
+        if (!_guard.IsAdmin(HttpContext))
+        {
+            var returnUrl = Url.Page("/Games/Details", new { id = Id });
+            return RedirectToPage("/Auth/Login", new { returnUrl });
+        }
+
         var g = await _db.Games.FindAsync(Id);
         if (g is null) return NotFound();
         if (g.Status != GameStatus.Active) return BadRequest("Game is not active.");

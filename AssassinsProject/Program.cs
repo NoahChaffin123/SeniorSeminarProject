@@ -21,6 +21,19 @@ builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<IEmailSender, AzureEmailSender>();
 
+// Admin session guard + session plumbing
+builder.Services.AddSingleton<AdminGuard>();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.Cookie.Name = ".Assassins.Admin";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.IdleTimeout = TimeSpan.FromHours(8);
+});
+
+builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
@@ -32,25 +45,42 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
 app.UseStaticFiles();
 
-app.UseRouting();
+app.UseSession();
 
+app.Use(async (ctx, next) =>
+{
+
+    var path = ctx.Request.Path.Value ?? string.Empty;
+
+
+    bool isPublic =
+        path.StartsWith("/auth/login", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/auth/logout", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/signup", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/eliminations/report", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/error", StringComparison.OrdinalIgnoreCase);
+
+    if (!isPublic)
+    {
+        var guard = ctx.RequestServices.GetRequiredService<AdminGuard>();
+        if (!guard.IsAdmin(ctx))
+        {
+            var returnUrl = ctx.Request.Path + ctx.Request.QueryString;
+            var loginUrl = $"/Auth/Login?returnUrl={Uri.EscapeDataString(returnUrl)}";
+            ctx.Response.Redirect(loginUrl);
+            return; 
+        }
+    }
+
+    await next();
+});
+
+app.UseRouting();
 app.UseAuthorization();
 
 app.MapRazorPages();
-
-
-//This was a test
-// using (var scope = app.Services.CreateScope())
-// {
-//     var emailSender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
-//     await emailSender.SendAsync(
-//         "chaffinnc@hendrix.edu",
-//         "This is a test from Noah's Assassins website",
-//         "Testing Testerson"
-//     );
-// }
-
 
 app.Run();
