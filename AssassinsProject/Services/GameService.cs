@@ -1,10 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
-using AssassinsProject.Utilities;
 using AssassinsProject.Services.Email;
+using AssassinsProject.Utilities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using System.Text;
 
 namespace AssassinsProject.Services
 {
@@ -12,30 +16,33 @@ namespace AssassinsProject.Services
     {
         private readonly AppDbContext _db;
         private readonly IEmailSender _emailSender;
-        private readonly string _publicBaseUrl;
 
-        public GameService(AppDbContext db, IEmailSender emailSender, IConfiguration config)
+        public GameService(AppDbContext db, IEmailSender emailSender)
         {
             _db = db;
             _emailSender = emailSender;
-
-            // Comes from App:PublicBaseUrl in appsettings.*.json
-            _publicBaseUrl = (config["App:PublicBaseUrl"] ?? "").TrimEnd('/');
         }
 
         // -------------------------
         // Game creation / players
         // -------------------------
+
         public async Task<Game> CreateGameAsync(string name, CancellationToken ct = default)
         {
-            var game = new Game { Name = name, Status = GameStatus.Setup, IsSignupOpen = true };
+            var game = new Game
+            {
+                Name = name,
+                Status = GameStatus.Setup,
+                IsSignupOpen = true
+            };
+
             _db.Games.Add(game);
             await _db.SaveChangesAsync(ct);
             return game;
         }
 
         // Admin add (full details just like public signup)
-        public async Task<(Player player, string passcode)> AddPlayerAdminAsync(
+        public Task<(Player player, string passcode)> AddPlayerAdminAsync(
             int gameId,
             string email,
             string realName,
@@ -49,8 +56,10 @@ namespace AssassinsProject.Services
             string? contentType,
             byte[]? photoSha256,
             CancellationToken ct = default)
-            => await AddPlayerWithDetailsAsync(
-                gameId, email, realName, alias, hairColor, eyeColor, visibleMarkings, approximateAge, specialty,
+            => AddPlayerWithDetailsAsync(
+                gameId, email, realName, alias,
+                hairColor, eyeColor, visibleMarkings,
+                approximateAge, specialty,
                 photoUrl, contentType, photoSha256, ct);
 
         // Public/admin add implementation
@@ -70,7 +79,6 @@ namespace AssassinsProject.Services
             CancellationToken ct = default)
         {
             var norm = EmailNormalizer.Normalize(email);
-
             var game = await _db.Games.SingleAsync(g => g.Id == gameId, ct);
 
             if (game.Status != GameStatus.Setup)
@@ -79,14 +87,18 @@ namespace AssassinsProject.Services
                 throw new InvalidOperationException("Signups are currently closed for this game.");
 
             // Enforce hendrix.edu
-            if (!norm.EndsWith("@hendrix.edu"))
+            if (!norm.EndsWith("@hendrix.edu", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only email addresses ending in @hendrix.edu can join.");
 
-            var existsEmail = await _db.Players.AnyAsync(p => p.GameId == gameId && p.EmailNormalized == norm, ct);
-            if (existsEmail) throw new InvalidOperationException("A player with this email already exists in this game.");
+            var existsEmail = await _db.Players
+                .AnyAsync(p => p.GameId == gameId && p.EmailNormalized == norm, ct);
+            if (existsEmail)
+                throw new InvalidOperationException("A player with this email already exists in this game.");
 
-            var existsAlias = await _db.Players.AnyAsync(p => p.GameId == gameId && p.Alias == alias, ct);
-            if (existsAlias) throw new InvalidOperationException("That alias is already taken in this game. Choose another.");
+            var existsAlias = await _db.Players
+                .AnyAsync(p => p.GameId == gameId && p.Alias == alias, ct);
+            if (existsAlias)
+                throw new InvalidOperationException("That alias is already taken in this game. Choose another.");
 
             var passcode = Passcode.Generate();
             var (hash, salt, algo, cost) = Passcode.Hash(passcode);
@@ -124,8 +136,9 @@ namespace AssassinsProject.Services
         }
 
         // -------------------------
-        // Start: single random ring (no 2-cycles)
+        // Start game: single random ring (no 2-cycles)
         // -------------------------
+
         public async Task StartGameAsync(int gameId, CancellationToken ct = default)
         {
             using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -157,6 +170,10 @@ namespace AssassinsProject.Services
         private async Task SendAssignmentEmailsAsync(Game game, List<Player> players, CancellationToken ct)
         {
             var byEmail = players.ToDictionary(p => p.Email, p => p);
+            var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                          ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+            var reportUrl = $"{baseUrl.TrimEnd('/')}/Eliminations/Report?gameId={game.Id}";
 
             foreach (var me in players)
             {
@@ -164,7 +181,8 @@ namespace AssassinsProject.Services
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
                     byEmail.TryGetValue(me.TargetEmail, out target);
 
-                var email = AssignmentEmailBuilder.Build(game, me, target, _publicBaseUrl);
+                var email = AssignmentEmailBuilder.BuildGameStartEmail(
+                    game, me, target, baseUrl, reportUrl);
 
                 try
                 {
@@ -172,40 +190,46 @@ namespace AssassinsProject.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Email Error] Could not send to {me.Email}: {ex.Message}");
+                    Console.WriteLine($"[Email Error] Could not send start email to {me.Email}: {ex.Message}");
                 }
             }
         }
 
         private static void AssignSingleCycle(List<Player> players)
         {
-            int n = players.Count;
-            for (int i = 0; i < n; i++)
+            var n = players.Count;
+            for (var i = 0; i < n; i++)
+            {
                 players[i].TargetEmail = players[(i + 1) % n].Email;
+            }
         }
 
         private static void ValidateSingleCycle(ICollection<Player> players)
         {
             var active = players.Where(p => p.IsActive).ToList();
-            int n = active.Count;
+            var n = active.Count;
             if (n < 2) return;
 
             var map = active.ToDictionary(p => p.Email, p => p.TargetEmail);
 
             foreach (var p in active)
             {
-                if (map[p.Email] is null) throw new InvalidOperationException("Every active player must have a target.");
-                if (map[p.Email] == p.Email) throw new InvalidOperationException("No player may target themselves.");
+                if (map[p.Email] is null)
+                    throw new InvalidOperationException("Every active player must have a target.");
+                if (map[p.Email] == p.Email)
+                    throw new InvalidOperationException("No player may target themselves.");
             }
 
             var start = active[0].Email;
             var visited = new HashSet<string>(capacity: n);
             var cur = start;
-            for (int steps = 0; steps < n; steps++)
+
+            for (var steps = 0; steps < n; steps++)
             {
                 if (!visited.Add(cur)) break;
                 cur = map[cur]!;
             }
+
             if (cur != start || visited.Count != n)
                 throw new InvalidOperationException("Target assignment must form a single ring. Try starting again.");
         }
@@ -213,6 +237,7 @@ namespace AssassinsProject.Services
         // -------------------------
         // Report elimination (requires both passcodes)
         // -------------------------
+
         public async Task ReportEliminationAsync(
             int gameId,
             string eliminatorEmail,
@@ -223,8 +248,7 @@ namespace AssassinsProject.Services
         {
             using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            var game = await _db.Games
-                .Include(g => g.Players)
+            var game = await _db.Games.Include(g => g.Players)
                 .SingleAsync(g => g.Id == gameId, ct);
 
             if (game.Status != GameStatus.Active)
@@ -233,8 +257,10 @@ namespace AssassinsProject.Services
             if (game.IsPaused)
                 throw new InvalidOperationException("Game is paused. Eliminations are temporarily disabled.");
 
-            var eliminator = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == eliminatorEmail, ct);
-            var victim = await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == victimEmail, ct);
+            var eliminator =
+                await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == eliminatorEmail, ct);
+            var victim =
+                await _db.Players.SingleAsync(p => p.GameId == gameId && p.Email == victimEmail, ct);
 
             if (!eliminator.IsActive || !victim.IsActive)
                 throw new InvalidOperationException("Inactive eliminator or victim.");
@@ -243,29 +269,27 @@ namespace AssassinsProject.Services
 
             var okElim = await VerifyOrRepairPasscodeAsync(eliminator, providedEliminatorPasscode, ct);
             if (!okElim) throw new InvalidOperationException("Your passcode is incorrect.");
+
             var okVictim = await VerifyOrRepairPasscodeAsync(victim, providedVictimPasscode, ct);
             if (!okVictim) throw new InvalidOperationException("Victim passcode is incorrect.");
 
-            // Points before we deactivate victim
             var awarded = victim.Points + 1;
             eliminator.Points += awarded;
 
-            // Capture victim's target
             var victimsTargetEmail = victim.TargetEmail;
 
-            // free the unique slot first
             victim.IsActive = false;
             victim.TargetEmail = null;
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct); // free unique index slot
 
-            // Move eliminator onto victim's former target (when more than 1 remains)
             var stillActive = game.Players.Count(p => p.IsActive);
             if (stillActive > 1)
             {
-                eliminator.TargetEmail = (victimsTargetEmail == eliminator.Email) ? null : victimsTargetEmail;
+                eliminator.TargetEmail = (victimsTargetEmail == eliminator.Email)
+                    ? null
+                    : victimsTargetEmail;
             }
 
-            // Record the elimination
             _db.Eliminations.Add(new Elimination
             {
                 GameId = gameId,
@@ -279,7 +303,6 @@ namespace AssassinsProject.Services
                 VerifiedAt = DateTimeOffset.UtcNow
             });
 
-            // Check for game end
             if (game.Players.Count(p => p.IsActive) == 1)
             {
                 game.Status = GameStatus.Completed;
@@ -289,20 +312,21 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // Send "next target" email after a successful elimination
+            // Next-target email (game still active and we have a real next target)
             if (game.Status == GameStatus.Active && !string.IsNullOrWhiteSpace(eliminator.TargetEmail))
             {
                 var nextTarget = game.Players.FirstOrDefault(p => p.Email == eliminator.TargetEmail);
                 if (nextTarget is not null)
                 {
-                    var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName) ? victim.Alias : victim.DisplayName;
+                    var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName)
+                        ? victim.Alias
+                        : victim.DisplayName;
+
+                    var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                                  ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
 
                     var (subject, html) = BuildNextTargetEmail(
-                        game,
-                        eliminator,
-                        nextTarget,
-                        previousTargetName,
-                        _publicBaseUrl);
+                        game, eliminator, nextTarget, previousTargetName, baseUrl);
 
                     try
                     {
@@ -345,18 +369,24 @@ namespace AssassinsProject.Services
         // -------------------------
         // Admin Remove
         // -------------------------
+
         public async Task RemovePlayerAsync(int gameId, string email, CancellationToken ct = default)
         {
             using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            var game = await _db.Games.Include(g => g.Players).SingleAsync(g => g.Id == gameId, ct);
-            var player = await _db.Players.SingleOrDefaultAsync(p => p.GameId == gameId && p.Email == email, ct);
-            if (player is null) throw new InvalidOperationException("Player not found.");
+            var game = await _db.Games.Include(g => g.Players)
+                .SingleAsync(g => g.Id == gameId, ct);
+
+            var player = await _db.Players
+                .SingleOrDefaultAsync(p => p.GameId == gameId && p.Email == email, ct);
+
+            if (player is null)
+                throw new InvalidOperationException("Player not found.");
 
             if (game.Status == GameStatus.Completed)
                 throw new InvalidOperationException("Cannot remove players from a completed game.");
 
-            // --- Setup phase: just delete them, no emails needed.
+            // Simple case: game still in setup => just delete
             if (game.Status == GameStatus.Setup)
             {
                 _db.Players.Remove(player);
@@ -365,7 +395,7 @@ namespace AssassinsProject.Services
                 return;
             }
 
-            // In Active phase we treat this like an admin-forced elimination.
+            // Active game
             if (!player.IsActive)
             {
                 await tx.CommitAsync(ct);
@@ -377,13 +407,16 @@ namespace AssassinsProject.Services
 
             var victimsTargetEmail = player.TargetEmail;
 
-            // free unique slot first
             player.IsActive = false;
             player.TargetEmail = null;
             await _db.SaveChangesAsync(ct);
 
             if (hunter is not null)
-                hunter.TargetEmail = (victimsTargetEmail == hunter.Email) ? null : victimsTargetEmail;
+            {
+                hunter.TargetEmail = (victimsTargetEmail == hunter.Email)
+                    ? null
+                    : victimsTargetEmail;
+            }
 
             if (game.Players.Count(p => p.IsActive) == 1)
             {
@@ -394,27 +427,34 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // After commit: let the hunter know they have a new target due to admin removal.
+            // If the game is still active and hunter has a new real target, email them.
             if (game.Status == GameStatus.Active &&
                 hunter is not null &&
+                hunter.IsActive &&
                 !string.IsNullOrWhiteSpace(hunter.TargetEmail))
             {
                 var newTarget = game.Players.FirstOrDefault(p => p.Email == hunter.TargetEmail);
                 if (newTarget is not null)
                 {
-                    var emailContent = TargetReassignmentEmailBuilder.Build(
-                        game,
-                        hunter,
-                        newTarget,
-                        _publicBaseUrl);
+                    var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
+                                  ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
+
+                    var reportUrl = $"{baseUrl.TrimEnd('/')}/Eliminations/Report?gameId={game.Id}";
+
+                    var previousName = string.IsNullOrWhiteSpace(player.DisplayName)
+                        ? player.Alias
+                        : player.DisplayName;
+
+                    var emailPayload = AssignmentEmailBuilder.BuildReassignmentEmail(
+                        game, hunter, newTarget, baseUrl, previousName, reportUrl);
 
                     try
                     {
-                        await _emailSender.SendAsync(hunter.Email, emailContent.Subject, emailContent.HtmlBody, ct);
+                        await _emailSender.SendAsync(hunter.Email, emailPayload.Subject, emailPayload.HtmlBody, ct);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Email Error] Target-reassignment email failed for {hunter.Email}: {ex.Message}");
+                        Console.WriteLine($"[Email Error] Reassignment email failed for {hunter.Email}: {ex.Message}");
                     }
                 }
             }
@@ -423,6 +463,26 @@ namespace AssassinsProject.Services
         // -------------------------
         // Email builder for "next target" after elimination
         // -------------------------
+
+        private static string? MakeAbsoluteUrlForEmail(string baseUrl, string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return null;
+
+            raw = raw.Trim();
+
+            if (Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+            {
+                if (!uri.Host.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+                    return raw;
+
+                var pathAndQuery = uri.PathAndQuery.TrimStart('/');
+                return $"{baseUrl.TrimEnd('/')}/{pathAndQuery}";
+            }
+
+            return $"{baseUrl.TrimEnd('/')}/{raw.TrimStart('/')}";
+        }
+
         private static (string subject, string html) BuildNextTargetEmail(
             Game game,
             Player me,
@@ -462,10 +522,7 @@ namespace AssassinsProject.Services
 
                 if (!string.IsNullOrWhiteSpace(nextTarget.PhotoUrl))
                 {
-                    absolutePhotoUrl = nextTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-                        ? nextTarget.PhotoUrl!
-                        : $"{baseUrl.TrimEnd('/')}/{nextTarget.PhotoUrl!.TrimStart('/')}";
-
+                    absolutePhotoUrl = MakeAbsoluteUrlForEmail(baseUrl, nextTarget.PhotoUrl);
                     details.AppendLine(
                         $"  <li><strong>Photo URL:</strong> <a href=\"{H(absolutePhotoUrl)}\">{H(absolutePhotoUrl)}</a></li>");
                 }
@@ -475,8 +532,10 @@ namespace AssassinsProject.Services
 
             var htmlBuilder = new StringBuilder()
                 .AppendLine($"<h2>{H(gameName)} – Next Target</h2>")
-                .AppendLine($"<p>Your elimination of <strong>{H(previousTargetName)}</strong> is confirmed. Here is the information of your next target:</p>")
-                .AppendLine("<p><strong>Your passcode:</strong> " + H(me.PasscodePlaintext ?? "(not set)") + "</p>")
+                .AppendLine("<p>Your elimination of <strong>" + H(previousTargetName) +
+                            "</strong> is confirmed. Here is the information of your next target:</p>")
+                .AppendLine("<p><strong>Your passcode:</strong> " +
+                            H(me.PasscodePlaintext ?? "(not set)") + "</p>")
                 .AppendLine("<p><strong>Your current target:</strong></p>")
                 .AppendLine(details.ToString());
 
@@ -485,12 +544,13 @@ namespace AssassinsProject.Services
                 htmlBuilder
                     .AppendLine("<div style=\"margin:12px 0;\">")
                     .AppendLine($"  <img src=\"{H(absolutePhotoUrl)}\" alt=\"Target photo\"")
-                    .AppendLine("       style=\"max-width:480px;width:100%;height:auto;border-radius:8px;border:1px solid #ddd;display:block;\" />")
+                    .AppendLine(
+                        "       style=\"max-width:480px;width:100%;height:auto;border-radius:8px;border:1px solid #ddd;display:block;\" />")
                     .AppendLine("</div>");
             }
 
-            htmlBuilder
-                .AppendLine("<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
+            htmlBuilder.AppendLine(
+                "<p><em>Do not share your passcode. You’ll need it when reporting an elimination.</em></p>");
 
             return (subject, htmlBuilder.ToString());
         }

@@ -745,6 +745,14 @@
       "PackagePath": "staticwebassets\\uploads\\players\\50\\noahclaychaffin-gmail.com.png"
     },
     {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\51\\chaffinnc-hendrix.edu.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\51\\chaffinnc-hendrix.edu.png"
+    },
+    {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\51\\noahchaffin2003-outlook.com.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\51\\noahchaffin2003-outlook.com.png"
+    },
+    {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.AssassinsProject.Microsoft.AspNetCore.StaticWebAssets.props",
       "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
     },
