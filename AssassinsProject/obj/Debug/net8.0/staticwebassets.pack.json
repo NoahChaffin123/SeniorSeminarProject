@@ -713,6 +713,26 @@
       "PackagePath": "staticwebassets\\uploads\\players\\47\\noahchaffin2003-outlook.com.png"
     },
     {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\48\\chaffinnc-hendrix.edu.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\48\\chaffinnc-hendrix.edu.png"
+    },
+    {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\48\\noahchaffin2003-outlook.com.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\48\\noahchaffin2003-outlook.com.png"
+    },
+    {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\49\\chaffinnc-hendrix.edu.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\49\\chaffinnc-hendrix.edu.png"
+    },
+    {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\49\\noahchaffin2003-outlook.com.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\49\\noahchaffin2003-outlook.com.png"
+    },
+    {
+      "Id": "C:\\Users\\noahc\\OneDrive\\Desktop\\FallSemester2026\\Senior Seminar\\SeniorSeminarProject\\AssassinsProject\\wwwroot\\uploads\\players\\49\\noahclaychaffin-gmail.com.png",
+      "PackagePath": "staticwebassets\\uploads\\players\\49\\noahclaychaffin-gmail.com.png"
+    },
+    {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.AssassinsProject.Microsoft.AspNetCore.StaticWebAssets.props",
       "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
     },

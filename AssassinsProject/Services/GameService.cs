@@ -3,6 +3,7 @@ using AssassinsProject.Models;
 using AssassinsProject.Utilities;
 using AssassinsProject.Services.Email;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System.Text;
 
 namespace AssassinsProject.Services
@@ -11,11 +12,15 @@ namespace AssassinsProject.Services
     {
         private readonly AppDbContext _db;
         private readonly IEmailSender _emailSender;
+        private readonly string _publicBaseUrl;
 
-        public GameService(AppDbContext db, IEmailSender emailSender)
+        public GameService(AppDbContext db, IEmailSender emailSender, IConfiguration config)
         {
             _db = db;
             _emailSender = emailSender;
+
+            // Comes from App:PublicBaseUrl in appsettings.*.json
+            _publicBaseUrl = (config["App:PublicBaseUrl"] ?? "").TrimEnd('/');
         }
 
         // -------------------------
@@ -146,7 +151,6 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // ✅ Send "assignment" email to each player (the full “game started” template)
             await SendAssignmentEmailsAsync(game, players, ct);
         }
 
@@ -160,10 +164,7 @@ namespace AssassinsProject.Services
                 if (!string.IsNullOrWhiteSpace(me.TargetEmail))
                     byEmail.TryGetValue(me.TargetEmail, out target);
 
-                var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
-                              ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
-
-                var email = AssignmentEmailBuilder.Build(game, me, target, baseUrl);
+                var email = AssignmentEmailBuilder.Build(game, me, target, _publicBaseUrl);
 
                 try
                 {
@@ -222,7 +223,10 @@ namespace AssassinsProject.Services
         {
             using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            var game = await _db.Games.Include(g => g.Players).SingleAsync(g => g.Id == gameId, ct);
+            var game = await _db.Games
+                .Include(g => g.Players)
+                .SingleAsync(g => g.Id == gameId, ct);
+
             if (game.Status != GameStatus.Active)
                 throw new InvalidOperationException("Game is not active.");
 
@@ -249,20 +253,19 @@ namespace AssassinsProject.Services
             // Capture victim's target
             var victimsTargetEmail = victim.TargetEmail;
 
-            // --- IMPORTANT ORDER TO SATISFY UNIQUE INDEX (GameId, TargetEmail) ---
-            // 1) Free the unique slot by clearing the victim's target first.
+            // free the unique slot first
             victim.IsActive = false;
             victim.TargetEmail = null;
-            await _db.SaveChangesAsync(ct); // ensures UPDATE executes before we set eliminator.TargetEmail
+            await _db.SaveChangesAsync(ct);
 
-            // 2) Move eliminator onto victim's former target (when more than 1 remains)
-            var stillActive = game.Players.Count(p => p.IsActive); // victim already inactive in memory
+            // Move eliminator onto victim's former target (when more than 1 remains)
+            var stillActive = game.Players.Count(p => p.IsActive);
             if (stillActive > 1)
             {
                 eliminator.TargetEmail = (victimsTargetEmail == eliminator.Email) ? null : victimsTargetEmail;
             }
 
-            // 3) Record the elimination
+            // Record the elimination
             _db.Eliminations.Add(new Elimination
             {
                 GameId = gameId,
@@ -276,7 +279,7 @@ namespace AssassinsProject.Services
                 VerifiedAt = DateTimeOffset.UtcNow
             });
 
-            // If that deactivated the last remaining opponent, end the game
+            // Check for game end
             if (game.Players.Count(p => p.IsActive) == 1)
             {
                 game.Status = GameStatus.Completed;
@@ -286,17 +289,20 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // Send "next target" email (only if game continues and a real next target exists)
+            // Send "next target" email after a successful elimination
             if (game.Status == GameStatus.Active && !string.IsNullOrWhiteSpace(eliminator.TargetEmail))
             {
                 var nextTarget = game.Players.FirstOrDefault(p => p.Email == eliminator.TargetEmail);
                 if (nextTarget is not null)
                 {
                     var previousTargetName = string.IsNullOrWhiteSpace(victim.DisplayName) ? victim.Alias : victim.DisplayName;
-                    var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
-                                  ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
 
-                    var (subject, html) = BuildNextTargetEmail(game, eliminator, nextTarget, previousTargetName, baseUrl);
+                    var (subject, html) = BuildNextTargetEmail(
+                        game,
+                        eliminator,
+                        nextTarget,
+                        previousTargetName,
+                        _publicBaseUrl);
 
                     try
                     {
@@ -350,6 +356,7 @@ namespace AssassinsProject.Services
             if (game.Status == GameStatus.Completed)
                 throw new InvalidOperationException("Cannot remove players from a completed game.");
 
+            // --- Setup phase: just delete them, no emails needed.
             if (game.Status == GameStatus.Setup)
             {
                 _db.Players.Remove(player);
@@ -358,6 +365,7 @@ namespace AssassinsProject.Services
                 return;
             }
 
+            // In Active phase we treat this like an admin-forced elimination.
             if (!player.IsActive)
             {
                 await tx.CommitAsync(ct);
@@ -369,7 +377,7 @@ namespace AssassinsProject.Services
 
             var victimsTargetEmail = player.TargetEmail;
 
-            // Order: free unique slot first
+            // free unique slot first
             player.IsActive = false;
             player.TargetEmail = null;
             await _db.SaveChangesAsync(ct);
@@ -386,35 +394,29 @@ namespace AssassinsProject.Services
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            // NEW: if the game is active and the hunter got a real new target, email them
-            if (game.Status == GameStatus.Active && hunter is not null && hunter.IsActive && !string.IsNullOrWhiteSpace(hunter.TargetEmail))
+            // After commit: let the hunter know they have a new target due to admin removal.
+            if (game.Status == GameStatus.Active &&
+                hunter is not null &&
+                !string.IsNullOrWhiteSpace(hunter.TargetEmail))
             {
-                var nextTarget = game.Players.FirstOrDefault(p => p.Email == hunter.TargetEmail);
-                await SendReassignmentEmailAsync(game, hunter, nextTarget, ct);
-            }
-        }
+                var newTarget = game.Players.FirstOrDefault(p => p.Email == hunter.TargetEmail);
+                if (newTarget is not null)
+                {
+                    var emailContent = TargetReassignmentEmailBuilder.Build(
+                        game,
+                        hunter,
+                        newTarget,
+                        _publicBaseUrl);
 
-        // -------------------------
-        // Helper: email hunter after admin removal (reassignment)
-        // -------------------------
-        private async Task SendReassignmentEmailAsync(Game game, Player hunter, Player? nextTarget, CancellationToken ct)
-        {
-            var baseUrl = Environment.GetEnvironmentVariable("APP_BASE_URL")
-                          ?? "https://assassins-game-cjddb5dydyfsb4bv.centralus-01.azurewebsites.net";
-
-            // Reuse the exact assignment template (so body matches “game started” emails)
-            var email = AssignmentEmailBuilder.Build(game, hunter, nextTarget, baseUrl);
-
-            // Override subject per request
-            var subject = $"{game.Name} - New Target due to your Target being removed";
-
-            try
-            {
-                await _emailSender.SendAsync(hunter.Email, subject, email.HtmlBody, ct);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Email Error] Reassignment email failed for {hunter.Email}: {ex.Message}");
+                    try
+                    {
+                        await _emailSender.SendAsync(hunter.Email, emailContent.Subject, emailContent.HtmlBody, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Email Error] Target-reassignment email failed for {hunter.Email}: {ex.Message}");
+                    }
+                }
             }
         }
 
@@ -458,20 +460,19 @@ namespace AssassinsProject.Services
                 if (!string.IsNullOrWhiteSpace(nextTarget.Specialty))
                     details.AppendLine($"  <li><strong>Specialty:</strong> {H(nextTarget.Specialty)}</li>");
 
-                // Photo link (if available)
                 if (!string.IsNullOrWhiteSpace(nextTarget.PhotoUrl))
                 {
                     absolutePhotoUrl = nextTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                         ? nextTarget.PhotoUrl!
                         : $"{baseUrl.TrimEnd('/')}/{nextTarget.PhotoUrl!.TrimStart('/')}";
 
-                    details.AppendLine($"  <li><strong>Photo URL:</strong> <a href=\"{H(absolutePhotoUrl)}\">{H(absolutePhotoUrl)}</a></li>");
+                    details.AppendLine(
+                        $"  <li><strong>Photo URL:</strong> <a href=\"{H(absolutePhotoUrl)}\">{H(absolutePhotoUrl)}</a></li>");
                 }
             }
 
             details.AppendLine("</ul>");
 
-            // Build the final HTML
             var htmlBuilder = new StringBuilder()
                 .AppendLine($"<h2>{H(gameName)} – Next Target</h2>")
                 .AppendLine($"<p>Your elimination of <strong>{H(previousTargetName)}</strong> is confirmed. Here is the information of your next target:</p>")
@@ -479,7 +480,6 @@ namespace AssassinsProject.Services
                 .AppendLine("<p><strong>Your current target:</strong></p>")
                 .AppendLine(details.ToString());
 
-            // NEW: inline image goes right here, between the list and the bottom note
             if (!string.IsNullOrWhiteSpace(absolutePhotoUrl))
             {
                 htmlBuilder
@@ -494,6 +494,5 @@ namespace AssassinsProject.Services
 
             return (subject, htmlBuilder.ToString());
         }
-
     }
 }

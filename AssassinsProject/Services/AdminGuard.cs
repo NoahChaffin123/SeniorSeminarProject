@@ -3,10 +3,6 @@ using Microsoft.Extensions.Configuration;
 
 namespace AssassinsProject.Services
 {
-    /// <summary>
-    /// Session-backed admin gate using a single passcode from configuration.
-    /// Not related to any 'Admin' namespaces you might already have.
-    /// </summary>
     public class AdminGuard
     {
         public const string SessionKey = "IsAdmin";

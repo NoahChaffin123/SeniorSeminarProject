@@ -4,21 +4,21 @@ using AssassinsProject.Models;
 
 namespace AssassinsProject.Services
 {
-    public static class AssignmentEmailBuilder
+    public static class TargetReassignmentEmailBuilder
     {
         public sealed record EmailContent(string Subject, string HtmlBody);
 
-        public static EmailContent Build(Game game, Player me, Player? target, string baseUrl)
+        public static EmailContent Build(Game game, Player me, Player? newTarget, string baseUrl)
         {
             static string H(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
 
             var gameName = game?.Name ?? "Assassins";
-            var subject  = $"The game \"{gameName}\" has started!";
+            var subject  = $"{gameName} Target Reassignment";
 
-            var tAlias = target?.Alias ?? "(no target assigned yet)";
-            var tDisplay = string.IsNullOrWhiteSpace(target?.DisplayName)
-                ? target?.Alias
-                : target?.DisplayName;
+            var tAlias = newTarget?.Alias ?? "(no target assigned yet)";
+            var tDisplay = string.IsNullOrWhiteSpace(newTarget?.DisplayName)
+                ? newTarget?.Alias
+                : newTarget?.DisplayName;
 
             var details = new StringBuilder()
                 .AppendLine("<ul>")
@@ -27,24 +27,24 @@ namespace AssassinsProject.Services
 
             string? absolutePhotoUrl = null;
 
-            if (target is not null)
+            if (newTarget is not null)
             {
-                if (target.ApproximateAge.HasValue)
-                    details.AppendLine($"  <li><strong>Approximate Age:</strong> {target.ApproximateAge.Value}</li>");
-                if (!string.IsNullOrWhiteSpace(target.HairColor))
-                    details.AppendLine($"  <li><strong>Hair Color:</strong> {H(target.HairColor)}</li>");
-                if (!string.IsNullOrWhiteSpace(target.EyeColor))
-                    details.AppendLine($"  <li><strong>Eye Color:</strong> {H(target.EyeColor)}</li>");
-                if (!string.IsNullOrWhiteSpace(target.VisibleMarkings))
-                    details.AppendLine($"  <li><strong>Visible Markings:</strong> {H(target.VisibleMarkings)}</li>");
-                if (!string.IsNullOrWhiteSpace(target.Specialty))
-                    details.AppendLine($"  <li><strong>Specialty:</strong> {H(target.Specialty)}</li>");
+                if (newTarget.ApproximateAge.HasValue)
+                    details.AppendLine($"  <li><strong>Approximate Age:</strong> {newTarget.ApproximateAge.Value}</li>");
+                if (!string.IsNullOrWhiteSpace(newTarget.HairColor))
+                    details.AppendLine($"  <li><strong>Hair Color:</strong> {H(newTarget.HairColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(newTarget.EyeColor))
+                    details.AppendLine($"  <li><strong>Eye Color:</strong> {H(newTarget.EyeColor)}</li>");
+                if (!string.IsNullOrWhiteSpace(newTarget.VisibleMarkings))
+                    details.AppendLine($"  <li><strong>Visible Markings:</strong> {H(newTarget.VisibleMarkings)}</li>");
+                if (!string.IsNullOrWhiteSpace(newTarget.Specialty))
+                    details.AppendLine($"  <li><strong>Specialty:</strong> {H(newTarget.Specialty)}</li>");
 
-                if (!string.IsNullOrWhiteSpace(target.PhotoUrl))
+                if (!string.IsNullOrWhiteSpace(newTarget.PhotoUrl))
                 {
-                    absolutePhotoUrl = target.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-                        ? target.PhotoUrl!
-                        : $"{baseUrl.TrimEnd('/')}/{target.PhotoUrl!.TrimStart('/')}";
+                    absolutePhotoUrl = newTarget.PhotoUrl!.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                        ? newTarget.PhotoUrl!
+                        : $"{baseUrl.TrimEnd('/')}/{newTarget.PhotoUrl!.TrimStart('/')}";
 
                     details.AppendLine(
                         $"  <li><strong>Photo:</strong> <a href=\"{H(absolutePhotoUrl)}\">{H(absolutePhotoUrl)}</a></li>");
@@ -57,11 +57,11 @@ namespace AssassinsProject.Services
             var reportUrlEscaped = H(reportUrl);
 
             var htmlBuilder = new StringBuilder()
-                .AppendLine($"<h2>The game \"{H(gameName)}\" has started!</h2>")
+                .AppendLine("<h2>You have been assigned a new target because your previous target was removed from the game.</h2>")
                 .AppendLine("<p><strong>Your passcode:</strong> " +
                             H(me.PasscodePlaintext ?? "(not set)") + "</p>")
                 .AppendLine($"<p>You can report eliminations here: <a href=\"{reportUrlEscaped}\">{reportUrlEscaped}</a></p>")
-                .AppendLine("<p><strong>Your current target:</strong></p>")
+                .AppendLine("<p><strong>Your new target:</strong></p>")
                 .AppendLine(details.ToString());
 
             if (!string.IsNullOrWhiteSpace(absolutePhotoUrl))
