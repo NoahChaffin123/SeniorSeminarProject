@@ -2,42 +2,67 @@
 @model AssassinsProject.Pages.Players.RemoveModel
 @{
     ViewData["Title"] = "Remove Player";
+    var p = Model.Player;
 }
+
 <h1>Remove Player</h1>
 
-<div class="alert alert-warning">
-  <div><strong>@Model.DisplayName</strong> (@Model.Email)</div>
-  @if (!string.IsNullOrEmpty(Model.PhotoUrl))
-  {
-    <div class="mt-2">
-      <img src="@Model.PhotoUrl" alt="photo" style="height:80px;width:80px;object-fit:cover;border-radius:8px;" />
-    </div>
-  }
-  <hr />
-  @if (Model.Status == AssassinsProject.Models.GameStatus.Setup)
-  {
-    <p>This will <strong>delete</strong> the player from the game.</p>
-  }
-  else if (Model.Status == AssassinsProject.Models.GameStatus.Active)
-  {
-    <p>This will <strong>deactivate</strong> the player and <strong>splice</strong> them out of the target ring. No points are awarded.</p>
-  }
-  else
-  {
-    <p>The game is completed; removal is not allowed.</p>
-  }
-</div>
-
-@if (Model.Status != AssassinsProject.Models.GameStatus.Completed)
+@if (p is null)
 {
-  <form method="post">
-    <input type="hidden" asp-for="GameId" />
-    <input type="hidden" asp-for="Email" />
-    <button class="btn btn-danger" type="submit">Confirm Remove</button>
-    <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Cancel</a>
-  </form>
+    <div class="alert alert-danger">
+        Player not found.
+    </div>
 }
 else
 {
-  <a class="btn btn-secondary" asp-page="/Games/Details" asp-route-id="@Model.GameId">Back</a>
+    <div class="alert alert-warning d-flex align-items-center">
+        <div class="me-3">
+            @if (!string.IsNullOrEmpty(p.PhotoUrl))
+            {
+                <img src="@p.PhotoUrl"
+                     alt="photo of @p.DisplayName"
+                     style="height:96px;width:96px;object-fit:cover;border-radius:8px;border:2px solid #ddd;" />
+            }
+            else
+            {
+                <div style="height:96px;width:96px;border-radius:8px;border:2px solid #ddd;background:#f2f2f2;"></div>
+            }
+        </div>
+        <div>
+            <h4 class="mb-1">
+                @(!string.IsNullOrWhiteSpace(p.RealName) ? p.RealName : p.DisplayName)
+                <small class="text-muted">(@p.Email)</small>
+            </h4>
+            <p class="mb-0">
+                This will <strong>delete</strong> the player from the game.
+            </p>
+        </div>
+    </div>
+
+    <form id="removePlayerForm" method="post">
+        <input type="hidden" asp-for="GameId" />
+        <input type="hidden" asp-for="Email" />
+
+        <button id="confirmRemoveBtn" type="submit" class="btn btn-danger">
+            Confirm Remove
+        </button>
+        <a asp-page="/Games/Details" asp-route-id="@Model.GameId" class="btn btn-secondary ms-2">
+            Cancel
+        </a>
+    </form>
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            const form = document.getElementById('removePlayerForm');
+            const btn = document.getElementById('confirmRemoveBtn');
+            if (!form || !btn) return;
+
+            form.addEventListener('submit', function () {
+                btn.disabled = true;
+                btn.textContent = 'Removing...';
+            });
+        })();
+    </script>
 }

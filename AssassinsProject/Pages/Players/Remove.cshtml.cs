@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using AssassinsProject.Data;
 using AssassinsProject.Models;
 using AssassinsProject.Services;
@@ -5,47 +6,55 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
-namespace AssassinsProject.Pages.Players;
-
-public class RemoveModel(AppDbContext db, GameService svc) : PageModel
+namespace AssassinsProject.Pages.Players
 {
-    private readonly AppDbContext _db = db;
-    private readonly GameService _svc = svc;
-
-    [BindProperty(SupportsGet = true)] public int GameId { get; set; }
-    [BindProperty(SupportsGet = true)] public string Email { get; set; } = "";
-
-    public string DisplayName { get; set; } = "";
-    public string? PhotoUrl { get; set; }
-    public GameStatus Status { get; set; }
-
-    public async Task<IActionResult> OnGetAsync()
+    public class RemoveModel : PageModel
     {
-        var game = await _db.Games.FindAsync(GameId);
-        if (game is null) return NotFound();
-        Status = game.Status;
+        private readonly AppDbContext _db;
+        private readonly GameService _svc;
 
-        var p = await _db.Players.SingleOrDefaultAsync(x => x.GameId == GameId && x.Email == Email);
-        if (p is null) return NotFound();
-
-        DisplayName = p.DisplayName;
-        PhotoUrl = p.PhotoUrl;
-
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostAsync()
-    {
-        try
+        public RemoveModel(AppDbContext db, GameService svc)
         {
-            await _svc.RemovePlayerAsync(GameId, Email);
-            return RedirectToPage("/Games/Details", new { id = GameId });
+            _db = db;
+            _svc = svc;
         }
-        catch (Exception ex)
+
+        [BindProperty(SupportsGet = true)]
+        public int GameId { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string Email { get; set; } = string.Empty;
+
+        // Exposed to the Razor view
+        public Player? Player { get; set; }
+
+        public async Task<IActionResult> OnGetAsync(int gameId, string email)
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            await OnGetAsync();
+            GameId = gameId;
+            Email = email;
+
+            Player = await _db.Players
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.GameId == gameId && p.Email == email);
+
+            if (Player is null)
+            {
+                return NotFound();
+            }
+
             return Page();
+        }
+
+        public async Task<IActionResult> OnPostAsync()
+        {
+            if (string.IsNullOrWhiteSpace(Email))
+            {
+                return BadRequest("Email is required.");
+            }
+
+            await _svc.RemovePlayerAsync(GameId, Email);
+
+            return RedirectToPage("/Games/Details", new { id = GameId });
         }
     }
 }
