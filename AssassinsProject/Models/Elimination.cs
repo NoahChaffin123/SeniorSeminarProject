@@ -9,7 +9,7 @@ namespace AssassinsProject.Models
         // Scope to a game
         public int GameId { get; set; }
 
-        // Composite FKs to Players(GameId, Email) — matches your DB
+        // Composite FKs to Players(GameId, Email) 
         public int EliminatorGameId { get; set; }
         public string EliminatorEmail { get; set; } = null!;
         public int VictimGameId { get; set; }
@@ -21,7 +21,7 @@ namespace AssassinsProject.Models
         public int PointsAwarded { get; set; }
         public DateTimeOffset? VerifiedAt { get; set; }
 
-        // Navigations (optional)
+        // Navigations 
         public Player? Eliminator { get; set; }
         public Player? Victim { get; set; }
     }

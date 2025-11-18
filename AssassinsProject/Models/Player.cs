@@ -17,11 +17,11 @@ namespace AssassinsProject.Models
         public string Alias { get; set; } = default!;
         public bool IsActive { get; set; } = true;
 
-        // Target linkage (optional)
+        // Target linkage 
         public string? TargetEmail { get; set; }
         public Player? Target { get; set; }
 
-        // Email verification (based on your migrations)
+        // Email verification 
         public bool IsEmailVerified { get; set; } = false;
         public DateTimeOffset? VerificationSentAt { get; set; }
         public string? VerificationToken { get; set; }
